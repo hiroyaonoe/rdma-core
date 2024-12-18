@@ -536,7 +536,7 @@ int socket(int domain, int type, int protocol)
 
 
 	fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
-	type -= 524288;
+	// type -= 524288;
 	fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
 	init_preload();
 
@@ -790,25 +790,30 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd, ret;
 
-	fprintf(stdout, "connect: %d\n", socket);
+	fprintf(stdout, "connect: connect: %d\n", socket);
 	if (fd_get(socket, &fd) == fd_rsocket) {
 		ret = rconnect(fd, addr, addrlen);
-		if (!ret || errno == EINPROGRESS)
+		fprintf(stdout, "connect: rconnect: %d %d %d %d\n", socket, fd, ret, errno);
+		if (!ret || errno == EINPROGRESS) {
+			fprintf(stdout, "connect: rconnect: error: %d %d %d %d\n", socket, fd, ret, errno);
 			return ret;
+		}
 
 		ret = transpose_socket(socket, fd_normal);
+		fprintf(stdout, "connect: transpose_socket: %d %d %d\n", socket, fd, ret);
 		if (ret < 0)
 			return ret;
 
 		rclose(fd);
 		fd = ret;
 	} else if (fd_gets(socket) == fd_fork) {
-		fprintf(stdout, "fd_store: %d\n", socket);
 		fd_store(socket, fd, fd_normal, fd_fork_active);
+		fprintf(stdout, "connect: fd_store: %d %d\n", socket, fd);
 	}
 
-	fprintf(stdout, "real.connect: %d\n", socket);
-	return real.connect(fd, addr, addrlen);
+	ret = real.connect(fd, addr, addrlen);
+	fprintf(stdout, "connect: real.connect: %d %d\n", socket, ret);
+	return ret;
 }
 
 ssize_t recv(int socket, void *buf, size_t len, int flags)

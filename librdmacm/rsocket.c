@@ -1745,7 +1745,7 @@ int rconnect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	int ret, save_errno;
 
 	print_stacktrace();
-	fprintf(stdout, "rsocket: rconnect: %d\n", socket);
+	fprintf(stdout, "rconnect: rconnect: %d\n", socket);
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
 		return ERR(EBADF);
