@@ -1208,6 +1208,7 @@ int rsocket(int domain, int type, int protocol)
 	}
 
 	rs_configure();
+	fprintf(stdout, "rsocket: rs_configure\n");
 	rs = rs_alloc(NULL, type);
 	fprintf(stdout, "rsocket: rs_alloc\n");
 	if (!rs) {
