@@ -536,7 +536,7 @@ int socket(int domain, int type, int protocol)
 
 
 	fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
-	type = SOCK_STREAM;
+	type -= 524288;
 	fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
 	init_preload();
 
