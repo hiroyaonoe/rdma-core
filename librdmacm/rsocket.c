@@ -32,6 +32,7 @@
  */
 #define _GNU_SOURCE
 #include <config.h>
+#include <execinfo.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -427,6 +428,16 @@ struct ds_udp_header {
 #define DS_UDP_IPV6_HDR_LEN 28
 
 #define ds_next_qp(qp) container_of((qp)->list.next, struct ds_qp, list)
+
+#define MAX_STACK_LEVELS 100
+
+void print_stacktrace(void)
+{
+  void *buffer[MAX_STACK_LEVELS];
+  int levels = backtrace(buffer, MAX_STACK_LEVELS);
+
+  backtrace_symbols_fd(buffer + 1, levels - 1, 1);
+}
 
 static void write_all(int fd, const void *msg, size_t len)
 {
@@ -1198,6 +1209,7 @@ int rsocket(int domain, int type, int protocol)
 	struct rsocket *rs;
 	int index, ret;
 
+	print_stacktrace();
 	fprintf(stdout, "rsocket: rsocket: %d %d %d\n", domain, type, protocol);
 	if ((domain != AF_INET && domain != AF_INET6 && domain != AF_IB) ||
 	    ((type != SOCK_STREAM) && (type != SOCK_DGRAM)) ||
@@ -1366,6 +1378,7 @@ int raccept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 	struct rsocket *rs, *new_rs;
 	int ret;
 
+	print_stacktrace();
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
 		return ERR(EBADF);
@@ -1731,6 +1744,7 @@ int rconnect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	struct rsocket *rs;
 	int ret, save_errno;
 
+	print_stacktrace();
 	fprintf(stdout, "rsocket: rconnect: %d\n", socket);
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
