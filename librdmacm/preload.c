@@ -584,13 +584,17 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 int listen(int socket, int backlog)
 {
 	int fd, ret;
+	fprintf(stdout, "listen: listen: %d %d\n", socket, backlog);
 	if (fd_get(socket, &fd) == fd_rsocket) {
+		fprintf(stdout, "listen: rlisten: %d %d %d\n", socket, backlog, fd);
 		ret = rlisten(fd, backlog);
 	} else {
+		fprintf(stdout, "listen: real.listen: %d %d %d\n", socket, backlog, fd);
 		ret = real.listen(fd, backlog);
 		if (!ret && fd_gets(socket) == fd_fork)
 			fd_store(socket, fd, fd_normal, fd_fork_listen);
 	}
+	fprintf(stdout, "listen: ret: %d\n", ret);
 	return ret;
 }
 
@@ -598,12 +602,16 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd, index, ret;
 
+	fprintf(stdout, "accept: accept: %d\n", socket);
 	if (fd_get(socket, &fd) == fd_rsocket) {
+		fprintf(stdout, "accept: rsocket: fd_open: %d %d\n", socket ,fd);
 		index = fd_open();
+		fprintf(stdout, "accept: rsocket: fd_open: %d %d %d\n", socket ,fd, index);
 		if (index < 0)
 			return index;
 
 		ret = raccept(fd, addr, addrlen);
+		fprintf(stdout, "accept: rsocket: raccept: %d %d %d\n", socket ,fd, ret);
 		if (ret < 0) {
 			fd_close(index, &fd);
 			return ret;
@@ -612,11 +620,14 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 		fd_store(index, ret, fd_rsocket, fd_ready);
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
+		fprintf(stdout, "accept: fork_listen: fd_open: %d %d\n", socket, fd);
 		index = fd_open();
+		fprintf(stdout, "accept: fork_listen: fd_open: %d %d %d\n", socket, fd, index);
 		if (index < 0)
 			return index;
 
 		ret = real.accept(fd, addr, addrlen);
+		fprintf(stdout, "accept: fork_listen: real.accept: %d %d %d\n", socket, fd, ret);
 		if (ret < 0) {
 			fd_close(index, &fd);
 			return ret;
@@ -625,7 +636,9 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 		fd_store(index, ret, fd_normal, fd_fork_passive);
 		return index;
 	} else {
-		return real.accept(fd, addr, addrlen);
+		ret = real.accept(fd, addr, addrlen);
+		fprintf(stdout, "accept: else: real.accept: %d %d %d\n", socket, fd, ret);
+		return ret;
 	}
 }
 
