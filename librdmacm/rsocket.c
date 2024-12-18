@@ -1198,26 +1198,36 @@ int rsocket(int domain, int type, int protocol)
 	struct rsocket *rs;
 	int index, ret;
 
+	fprintf(stdout, "rsocket: rsocket: %d %d %d\n", domain, type, protocol);
 	if ((domain != AF_INET && domain != AF_INET6 && domain != AF_IB) ||
 	    ((type != SOCK_STREAM) && (type != SOCK_DGRAM)) ||
 	    (type == SOCK_STREAM && protocol && protocol != IPPROTO_TCP) ||
-	    (type == SOCK_DGRAM && protocol && protocol != IPPROTO_UDP))
+	    (type == SOCK_DGRAM && protocol && protocol != IPPROTO_UDP)) {
+		fprintf(stdout, "rsocket: error: %d %d %d\n", domain, type, protocol);
 		return ERR(ENOTSUP);
+	}
 
 	rs_configure();
 	rs = rs_alloc(NULL, type);
-	if (!rs)
+	fprintf(stdout, "rsocket: rs_alloc\n");
+	if (!rs) {
+		fprintf(stdout, "rsocket: rs_alloc: error\n");
 		return ERR(ENOMEM);
+	}
 
 	if (type == SOCK_STREAM) {
+		fprintf(stdout, "rsocket: SOCK_STREAM: %d %d %d\n", domain, type, protocol);
 		ret = rdma_create_id(NULL, &rs->cm_id, rs, RDMA_PS_TCP);
+		fprintf(stdout, "rsocket: rdma_create_id: %d\n", ret);
 		if (ret)
 			goto err;
 
 		rs->cm_id->route.addr.src_addr.sa_family = domain;
 		index = rs->cm_id->channel->fd;
 	} else {
+		fprintf(stdout, "rsocket: SOCK_DGRAM: %d %d %d\n", domain, type, protocol);
 		ret = ds_init(rs, domain);
+		fprintf(stdout, "rsocket: ds_init: %d\n", ret);
 		if (ret)
 			goto err;
 
@@ -1225,6 +1235,7 @@ int rsocket(int domain, int type, int protocol)
 	}
 
 	ret = rs_insert(rs, index);
+	fprintf(stdout, "rsocket: rs_insert: %d\n", ret);
 	if (ret < 0)
 		goto err;
 
@@ -1719,6 +1730,7 @@ int rconnect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	struct rsocket *rs;
 	int ret, save_errno;
 
+	fprintf(stdout, "rsocket: rconnect: %d\n", socket);
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
 		return ERR(EBADF);

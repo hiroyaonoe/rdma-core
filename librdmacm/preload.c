@@ -534,8 +534,13 @@ int socket(int domain, int type, int protocol)
 	static __thread int recursive;
 	int index, ret;
 
+
+	fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
+	type = SOCK_STREAM;
+	fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
 	init_preload();
 
+	fprintf(stdout, "socket: socket: %d\n", recursive);
 	if (recursive || !intercept_socket(domain, type, protocol))
 		goto real;
 
@@ -543,8 +548,10 @@ int socket(int domain, int type, int protocol)
 	if (index < 0)
 		return index;
 
+	fprintf(stdout, "socket: socket: PF_INET:%d SOCK_STREAM:%d IPPROTO_TCP:%d fork_support:%d\n", PF_INET, SOCK_STREAM, IPPROTO_TCP, fork_support);
 	if (fork_support && (domain == PF_INET || domain == PF_INET6) &&
 	    (type == SOCK_STREAM) && (!protocol || protocol == IPPROTO_TCP)) {
+		fprintf(stdout, "socket: real.socket: %d %d %d\n", domain, type, protocol);
 		ret = real.socket(domain, type, protocol);
 		if (ret < 0)
 			return ret;
@@ -553,7 +560,9 @@ int socket(int domain, int type, int protocol)
 	}
 
 	recursive = 1;
+	fprintf(stdout, "socket: rsocket: %d %d %d\n", domain, type, protocol);
 	ret = rsocket(domain, type, protocol);
+	fprintf(stdout, "socket: rsocket: %d\n", ret);
 	recursive = 0;
 	if (ret >= 0) {
 		fd_store(index, ret, fd_rsocket, fd_ready);
@@ -768,6 +777,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd, ret;
 
+	fprintf(stdout, "connect: %d\n", socket);
 	if (fd_get(socket, &fd) == fd_rsocket) {
 		ret = rconnect(fd, addr, addrlen);
 		if (!ret || errno == EINPROGRESS)
@@ -780,9 +790,11 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 		rclose(fd);
 		fd = ret;
 	} else if (fd_gets(socket) == fd_fork) {
+		fprintf(stdout, "fd_store: %d\n", socket);
 		fd_store(socket, fd, fd_normal, fd_fork_active);
 	}
 
+	fprintf(stdout, "real.connect: %d\n", socket);
 	return real.connect(fd, addr, addrlen);
 }
 
