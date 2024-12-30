@@ -1406,21 +1406,27 @@ static int rs_do_connect(struct rsocket *rs)
 	struct rs_conn_data *creq, *cresp;
 	int to, ret;
 
+	fprintf(stdout, "rs_do_connect: rs_do_connect\n");
 	fastlock_acquire(&rs->slock);
+	fprintf(stdout, "rs_do_connect: fastlock_acquire\n");
 	switch (rs->state) {
 	case rs_init:
 	case rs_bound:
 resolve_addr:
+		fprintf(stdout, "rs_do_connect: rs->state rs_init or rs_bound\n");
 		to = 1000 << rs->retries++;
 		ret = rdma_resolve_addr(rs->cm_id, NULL,
 					&rs->cm_id->route.addr.dst_addr, to);
+		fprintf(stdout, "rs_do_connect: rdma_resolve_addr: ret %d errno %d\n", ret, errno);
 		if (!ret)
 			goto resolve_route;
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			rs->state = rs_resolving_addr;
 		break;
 	case rs_resolving_addr:
+		fprintf(stdout, "rs_do_connect: rs->state rs_resolving_addr\n");
 		ret = ucma_complete(rs->cm_id);
+		fprintf(stdout, "rs_do_connect: ucma_complete: ret %d errno %d\n", ret, errno);
 		if (ret) {
 			if (errno == ETIMEDOUT && rs->retries <= RS_CONN_RETRIES)
 				goto resolve_addr;
@@ -1431,9 +1437,11 @@ resolve_addr:
 resolve_route:
 		to = 1000 << rs->retries++;
 		if (rs->optval) {
+			fprintf(stdout, "rs_do_connect: rs->optval true\n");
 			ret = rdma_set_option(rs->cm_id,  RDMA_OPTION_IB,
 					      RDMA_OPTION_IB_PATH, rs->optval,
 					      rs->optlen);
+			fprintf(stdout, "rs_do_connect: rdma_set_option: ret %d\n", ret);
 			free(rs->optval);
 			rs->optval = NULL;
 			if (!ret) {
@@ -1441,7 +1449,9 @@ resolve_route:
 				goto resolving_route;
 			}
 		} else {
+			fprintf(stdout, "rs_do_connect: rs->optval false\n");
 			ret = rdma_resolve_route(rs->cm_id, to);
+			fprintf(stdout, "rs_do_connect: rdma_resolve_route: ret %d\n", ret);
 			if (!ret)
 				goto do_connect;
 		}
@@ -1450,7 +1460,9 @@ resolve_route:
 		break;
 	case rs_resolving_route:
 resolving_route:
+		fprintf(stdout, "rs_do_connect: rs->state rs_resolving_route\n");
 		ret = ucma_complete(rs->cm_id);
+		fprintf(stdout, "rs_do_connect: ucma_complete: ret %d errno %d\n", ret, errno);
 		if (ret) {
 			if (errno == ETIMEDOUT && rs->retries <= RS_CONN_RETRIES)
 				goto resolve_route;
@@ -1458,14 +1470,20 @@ resolving_route:
 		}
 do_connect:
 		ret = rs_create_ep(rs);
+		fprintf(stdout, "rs_do_connect: rs_create_ep: ret %d\n", ret);
 		if (ret)
 			break;
 
 		memset(&param, 0, sizeof param);
+		fprintf(stdout, "rs_do_connect: memset\n");
 		creq = (void *) &cdata + rs_conn_data_offset(rs);
+		fprintf(stdout, "rs_do_connect: (void *) &cdata + rs_conn_data_offset(rs)\n");
 		rs_format_conn_data(rs, creq);
+		fprintf(stdout, "rs_do_connect: rs_format_conn_data\n");
 		param.private_data = (void *) creq - rs_conn_data_offset(rs);
+		fprintf(stdout, "rs_do_connect: param.private_data\n");
 		param.private_data_len = sizeof(*creq) + rs_conn_data_offset(rs);
+		fprintf(stdout, "rs_do_connect: param.private_data_len\n");
 		param.flow_control = 1;
 		param.retry_count = 7;
 		param.rnr_retry_count = 7;
@@ -1475,30 +1493,39 @@ do_connect:
 		rs->retries = 0;
 
 		ret = rdma_connect(rs->cm_id, &param);
+		fprintf(stdout, "rs_do_connect: rdma_connect: ret %d errno %d\n", ret, errno);
 		if (!ret)
 			goto connected;
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			rs->state = rs_connecting;
 		break;
 	case rs_connecting:
+		fprintf(stdout, "rs_do_connect: rs->state rs_connecting\n");
 		ret = ucma_complete(rs->cm_id);
+		fprintf(stdout, "rs_do_connect: ucma_complete: ret %d errno %d\n", ret, errno);
 		if (ret)
 			break;
 connected:
 		cresp = (struct rs_conn_data *) rs->cm_id->event->param.conn.private_data;
+		fprintf(stdout, "rs_do_connect: cresp->version: %d\n", cresp->version);
 		if (cresp->version != 1) {
 			ret = ERR(ENOTSUP);
 			break;
 		}
 
 		rs_save_conn_data(rs, cresp);
+		fprintf(stdout, "rs_do_connect: rs_save_conn_data\n");
 		rs->state = rs_connect_rdwr;
 		break;
 	case rs_accepting:
-		if (!(rs->fd_flags & O_NONBLOCK))
+		fprintf(stdout, "rs_do_connect: rs->state rs_accepting\n");
+		if (!(rs->fd_flags & O_NONBLOCK)) {
 			set_fd_nonblock(rs->cm_id->channel->fd, true);
+			fprintf(stdout, "rs_do_connect: set_fd_nonblock\n");
+		}
 
 		ret = ucma_complete(rs->cm_id);
+		fprintf(stdout, "rs_do_connect: ucma_complete: ret %d errno %d\n", ret, errno);
 		if (ret)
 			break;
 
@@ -1507,13 +1534,16 @@ connected:
 	case rs_connect_error:
 	case rs_disconnected:
 	case rs_error:
+		fprintf(stdout, "rs_do_connect: rs->state rs_connect_error or rs_disconnected or rs_error\n");
 		ret = ERR(ENOTCONN);
 		goto unlock;
 	default:
+		fprintf(stdout, "rs_do_connect: rs->state default\n");
 		ret = (rs->state & rs_connected) ? 0 : ERR(EINVAL);
 		goto unlock;
 	}
 
+	fprintf(stdout, "rs_do_connect: ret %d errno %d\n", ret, errno);
 	if (ret) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
 			errno = EINPROGRESS;
@@ -1524,6 +1554,7 @@ connected:
 	}
 unlock:
 	fastlock_release(&rs->slock);
+	fprintf(stdout, "rs_do_connect: fastlock_release\n");
 	return ret;
 }
 
@@ -1747,11 +1778,15 @@ int rconnect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	print_stacktrace();
 	fprintf(stdout, "rconnect: rconnect: %d\n", socket);
 	rs = idm_lookup(&idm, socket);
+	fprintf(stdout, "rconnect: idm_lookup\n");
 	if (!rs)
 		return ERR(EBADF);
 	if (rs->type == SOCK_STREAM) {
+		fprintf(stdout, "rconnect: rs->type == SOCK_STREAM\n");
 		memcpy(&rs->cm_id->route.addr.dst_addr, addr, addrlen);
+		fprintf(stdout, "rconnect: memcpy\n");
 		ret = rs_do_connect(rs);
+		fprintf(stdout, "rconnect: rconnect: ret %d errno %d\n", ret, errno);
 		if (ret == -1 && errno == EINPROGRESS) {
 			save_errno = errno;
 			/* The app can still drive the CM state on failure */
@@ -1759,17 +1794,24 @@ int rconnect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 			errno = save_errno;
 		}
 	} else {
+		fprintf(stdout, "rconnect: else\n");
 		if (rs->state == rs_init) {
+			fprintf(stdout, "rconnect: rs->state == rs_init\n");
 			ret = ds_init_ep(rs);
+			fprintf(stdout, "rconnect: ds_init_ep: ret %d\n", ret);
 			if (ret)
 				return ret;
 		}
 
 		fastlock_acquire(&rs->slock);
+		fprintf(stdout, "rconnect: fastlock_acquire\n");
 		ret = connect(rs->udp_sock, addr, addrlen);
+		fprintf(stdout, "rconnect: connect: ret %d\n", ret);
 		if (!ret)
 			ret = ds_get_dest(rs, addr, addrlen, &rs->conn_dest);
+		fprintf(stdout, "rconnect: connect: ret(0) %d\n", ret);
 		fastlock_release(&rs->slock);
+		fprintf(stdout, "rconnect: fastlock_release\n");
 	}
 	return ret;
 }
