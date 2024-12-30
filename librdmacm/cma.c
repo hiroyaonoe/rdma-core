@@ -885,6 +885,7 @@ static int ucma_query_addr(struct rdma_cm_id *id)
 	memcpy(&id->route.addr.dst_addr, &resp.dst_addr, resp.dst_size);
 
 	if (!id_priv->cma_dev && resp.node_guid) {
+	// if (!id_priv->cma_dev) {
 		ret = ucma_get_device(id_priv, resp.node_guid,
 				      resp.ibdev_index);
 		if (ret)
@@ -2281,17 +2282,30 @@ int rdma_ack_cm_event(struct rdma_cm_event *event)
 
 static void ucma_process_addr_resolved(struct cma_event *evt)
 {
+	fprintf(stdout, "ucma_process_addr_resolved: ucma_process_addr_resolved\n");
 	if (af_ib_support) {
+		fprintf(stdout, "ucma_process_addr_resolved: af_ib_support true\n");
 		evt->event.status = ucma_query_addr(&evt->id_priv->id);
+		fprintf(stdout, "ucma_process_addr_resolved: ucma_query_addr\n");
+		fprintf(stdout, "ucma_process_addr_resolved: evt->event.status %d\n", evt->event.status);
+		fprintf(stdout, "ucma_process_addr_resolved: evt->id_priv->id.verbs->device->transport_type %d\n", evt->id_priv->id.verbs->device->transport_type);
 		if (!evt->event.status &&
-		    evt->id_priv->id.verbs->device->transport_type == IBV_TRANSPORT_IB)
+		    evt->id_priv->id.verbs->device->transport_type == IBV_TRANSPORT_IB) {
+			fprintf(stdout, "ucma_process_addr_resolved: !evt->event.status && evt->id_priv->id.verbs->device->transport_type == IBV_TRANSPORT_IB\n");
 			evt->event.status = ucma_query_gid(&evt->id_priv->id);
+			fprintf(stdout, "ucma_process_addr_resolved: ucma_query_gid\n");
+		}
 	} else {
+		fprintf(stdout, "ucma_process_addr_resolved: af_ib_support false\n");
 		evt->event.status = ucma_query_route(&evt->id_priv->id);
+		fprintf(stdout, "ucma_process_addr_resolved: ucma_query_route\n");
 	}
 
-	if (evt->event.status)
+	if (evt->event.status) {
 		evt->event.event = RDMA_CM_EVENT_ADDR_ERROR;
+		fprintf(stdout, "ucma_process_addr_resolved: RDMA_CM_EVENT_ADDR_ERROR\n");
+	}
+	fprintf(stdout, "ucma_process_addr_resolved: return\n");
 }
 
 static void ucma_process_route_resolved(struct cma_event *evt)
