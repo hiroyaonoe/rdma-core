@@ -795,7 +795,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 		ret = rconnect(fd, addr, addrlen);
 		fprintf(stdout, "connect: rconnect: %d %d %d %d\n", socket, fd, ret, errno);
 		if (!ret || errno == EINPROGRESS) {
-			fprintf(stdout, "connect: rconnect: error: %d %d %d %d\n", socket, fd, ret, errno);
+			fprintf(stdout, "connect: rconnect: not error: %d %d %d %d\n", socket, fd, ret, errno);
 			return ret;
 		}
 
