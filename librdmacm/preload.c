@@ -529,7 +529,14 @@ static void set_rsocket_options(int rsocket)
 		rsetsockopt(rsocket, SOL_RDMA, RDMA_INLINE, &sq_inline, sizeof sq_inline);
 }
 
+int do_socket(int domain, int type, int protocol);
+
 int socket(int domain, int type, int protocol)
+{
+	return do_socket(domain, type, protocol);
+}
+
+int do_socket(int domain, int type, int protocol)
 {
 	static __thread int recursive;
 	int index, ret;
@@ -565,14 +572,28 @@ real:
 	return real.socket(domain, type, protocol);
 }
 
+int do_bind(int socket, const struct sockaddr *addr, socklen_t addrlen);
+
 int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
+{
+	return do_bind(socket, addr, addrlen);
+}
+
+int do_bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd;
 	return (fd_get(socket, &fd) == fd_rsocket) ?
 		rbind(fd, addr, addrlen) : real.bind(fd, addr, addrlen);
 }
 
+int do_listen(int socket, int backlog);
+
 int listen(int socket, int backlog)
+{
+	return do_listen(socket, backlog);
+}
+
+int do_listen(int socket, int backlog)
 {
 	int fd, ret;
 	if (fd_get(socket, &fd) == fd_rsocket) {
@@ -585,7 +606,14 @@ int listen(int socket, int backlog)
 	return ret;
 }
 
+int do_accept(int socket, struct sockaddr *addr, socklen_t *addrlen);
+
 int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
+{
+	return do_accept(socket, addr, addrlen);
+}
+
+int do_accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd, index, ret;
 
@@ -764,7 +792,14 @@ static inline enum fd_type fd_fork_get(int index, int *fd)
 	}
 }
 
+int do_connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
+
 int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
+{
+	return do_connect(socket, addr, addrlen);
+}
+
+int do_connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd, ret;
 
@@ -1033,7 +1068,14 @@ int getpeername(int socket, struct sockaddr *addr, socklen_t *addrlen)
 		real.getpeername(fd, addr, addrlen);
 }
 
+int do_getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen);
+
 int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
+{
+	return do_getsockname(socket, addr, addrlen);
+}
+
+int do_getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd;
 	init_preload();
@@ -1042,7 +1084,16 @@ int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 		real.getsockname(fd, addr, addrlen);
 }
 
+int do_setsockopt(int socket, int level, int optname,
+		const void *optval, socklen_t optlen);
+
 int setsockopt(int socket, int level, int optname,
+		const void *optval, socklen_t optlen)
+{
+	return do_setsockopt(socket, level, optname, optval, optlen);
+}
+
+int do_setsockopt(int socket, int level, int optname,
 		const void *optval, socklen_t optlen)
 {
 	int fd;
@@ -1060,7 +1111,14 @@ int getsockopt(int socket, int level, int optname,
 		real.getsockopt(fd, level, optname, optval, optlen);
 }
 
+int do_fcntl(int socket, int cmd, ... /* arg */);
+
 int fcntl(int socket, int cmd, ... /* arg */)
+{
+	return do_fcntl(socket, cmd);
+}
+
+int do_fcntl(int socket, int cmd, ... /* arg */)
 {
 	va_list args;
 	long lparam;
