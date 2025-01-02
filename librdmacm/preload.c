@@ -59,6 +59,8 @@
 #include "cma.h"
 #include "indexer.h"
 
+#define ETRYRDMA 999
+
 struct socket_calls {
 	int (*socket)(int domain, int type, int protocol);
 	int (*bind)(int socket, const struct sockaddr *addr, socklen_t addrlen);
@@ -97,6 +99,8 @@ static struct socket_calls rs;
 
 static struct index_map idm;
 static pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
+// static struct index_map sockidm;
+// static pthread_mutex_t sockmut = PTHREAD_MUTEX_INITIALIZER;
 
 static int sq_size;
 static int rq_size;
@@ -110,6 +114,7 @@ enum fd_type {
 
 enum fd_fork_state {
 	fd_ready,
+	fd_tiaccoon,
 	fd_fork,
 	fd_fork_listen,
 	fd_fork_active,
@@ -130,6 +135,77 @@ struct config_entry {
 	int type;
 	int protocol;
 };
+
+// struct sock_info {
+// 	int fd;
+// 	int domain;
+// 	int type;
+// 	int protocol;
+// };
+
+static char *sockaddr2char(const struct sockaddr *addr) {
+	static char result[NI_MAXHOST + NI_MAXSERV + 32];
+	char host[NI_MAXHOST], service[NI_MAXSERV];
+	int ret;
+
+	if (!addr) {
+		snprintf(result, sizeof(result), "Address is NULL");
+		return result;
+	}
+
+	switch (addr->sa_family) {
+		case AF_UNIX:
+			snprintf(result, sizeof(result), "Unix Domain Socket: %d: %s", addr->sa_family, addr->sa_data);
+			return result;
+			break;
+	}
+
+	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+	if (ret != 0) {
+		snprintf(result, sizeof(result), "getnameinfo: %s", gai_strerror(ret));
+		return result;
+	}
+
+	switch (addr->sa_family) {
+		case AF_INET:
+			snprintf(result, sizeof(result), "IPv4 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		case AF_INET6:
+			snprintf(result, sizeof(result), "IPv6 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		case AF_IB:
+			snprintf(result, sizeof(result), "InfiniBand Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		default:
+			snprintf(result, sizeof(result), "Unknown Address Family: %d: %s", addr->sa_family, host);
+			break;
+	}
+
+	return result;
+}
+
+static char* byte2char(const char *buf, size_t len) {
+    static char result[1024];
+    char *ptr = result;
+    size_t i;
+
+    for (i = 0; i < len; i++) {
+        ptr += snprintf(ptr, sizeof(result) - (ptr - result), "%.2x ", (unsigned char)buf[i]);
+        if (ptr - result >= sizeof(result)) {
+            break;
+        }
+    }
+
+    // Remove the trailing space
+    if (ptr != result && *(ptr - 1) == ' ') {
+        *(ptr - 1) = '\0';
+    } else {
+        *ptr = '\0';
+    }
+
+    return result;
+}
+
 
 static struct config_entry *config;
 static int config_cnt;
@@ -533,7 +609,29 @@ int do_socket(int domain, int type, int protocol);
 
 int socket(int domain, int type, int protocol)
 {
-	return do_socket(domain, type, protocol);
+	int fd;
+	// struct sock_info *si;
+	// fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
+	fd = do_socket(domain, type, protocol);
+	// fprintf(stdout, "socket: socket: fd %d\n", fd);
+	// if (fd < 0) {
+	// 	fprintf(stdout, "socket: socket: ret %d errno %d\n", fd, errno);
+	// 	return fd;
+	// }
+	// si = malloc(sizeof(struct sock_info));
+	// si->fd = fd;
+	// si->domain = domain;
+	// si->type = type;
+	// si->protocol = protocol;
+	// pthread_mutex_lock(&sockmut);
+	// idm_set(&sockidm, fd, si);
+	// pthread_mutex_unlock(&sockmut);
+	// fprintf(stdout, "socket: si: %d %d %d %d\n",
+	// 	si->fd,
+	// 	si->domain,
+	// 	si->type,
+	// 	si->protocol);
+	return fd;
 }
 
 int do_socket(int domain, int type, int protocol)
@@ -541,6 +639,7 @@ int do_socket(int domain, int type, int protocol)
 	static __thread int recursive;
 	int index, ret;
 
+	fprintf(stdout, "do_socket: do_socket: %d %d %d\n", domain, type, protocol);
 	init_preload();
 
 	if (recursive || !intercept_socket(domain, type, protocol))
@@ -550,26 +649,36 @@ int do_socket(int domain, int type, int protocol)
 	if (index < 0)
 		return index;
 
-	if (fork_support && (domain == PF_INET || domain == PF_INET6) &&
+	if ((domain == PF_INET || domain == PF_INET6) &&
 	    (type == SOCK_STREAM) && (!protocol || protocol == IPPROTO_TCP)) {
 		ret = real.socket(domain, type, protocol);
 		if (ret < 0)
 			return ret;
-		fd_store(index, ret, fd_normal, fd_fork);
+		if (fork_support) {
+			fprintf(stdout, "do_socket: fork_support: %d\n", index);
+			fd_store(index, ret, fd_normal, fd_fork);
+		} else {
+			fprintf(stdout, "do_socket: tiaccoon: %d\n", index);
+			fd_store(index, ret, fd_normal, fd_tiaccoon);
+		}
 		return index;
 	}
 
 	recursive = 1;
 	ret = rsocket(domain, type, protocol);
+	fprintf(stdout, "do_socket: rsocket: %d\n", ret);
 	recursive = 0;
 	if (ret >= 0) {
 		fd_store(index, ret, fd_rsocket, fd_ready);
 		set_rsocket_options(ret);
+		fprintf(stdout, "do_socket: rsocket: %d\n", index);
 		return index;
 	}
 	fd_close(index, &ret);
 real:
-	return real.socket(domain, type, protocol);
+	ret = real.socket(domain, type, protocol);
+	fprintf(stdout, "do_socket: real.socket: %d\n", ret);
+	return ret;
 }
 
 int do_bind(int socket, const struct sockaddr *addr, socklen_t addrlen);
@@ -796,29 +905,106 @@ int do_connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
 
 int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
-	return do_connect(socket, addr, addrlen);
+	int ret;
+	// struct sock_info *si;
+	// fprintf(stdout, "connect: connect: %d addr %d %s addrlen %d\n",
+	// 	socket,
+	// 	addr->sa_family,
+	// 	addr->sa_data,
+	// 	addrlen);
+	// ret = real.connect(socket, addr, addrlen);
+	// fprintf(stdout, "connect: connect: ret %d errno %d\n", ret, errno);
+	// if (ret && errno == ETRYRDMA) {
+	// 	fprintf(stdout, "connect: try rdma: %d addr %d %s addrlen %d ret %d errno %d\n",
+	// 		socket,
+	// 		addr->sa_family,
+	// 		addr->sa_data,
+	// 		addrlen,
+	// 		ret,
+	// 		errno);
+	// 	si = idm_lookup(&sockidm, socket);
+	// 	if (!si) {
+	// 		fprintf(stdout, "connect: si: %d not found\n", socket);
+	// 		return -1;
+	// 	}
+	// 	fprintf(stdout, "connect: si: %d %d %d %d\n",
+	// 		si->fd,
+	// 		si->domain,
+	// 		si->type,
+	// 		si->protocol);
+	// 	// rsock = do_socket(si->domain, si->type, si->protocol);
+	// 	// fprintf(stdout, "connect: do_socket: %d\n", rsock);
+	// 	return do_connect(socket, addr, ret);
+	// }
+	ret = do_connect(socket, addr, addrlen);
+	return ret;
 }
 
 int do_connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd, ret;
+	char *addr_str, *addr_raw;
 
-	if (fd_get(socket, &fd) == fd_rsocket) {
+	addr_str = sockaddr2char(addr);
+	addr_raw = byte2char(addr->sa_data, addrlen);
+	fprintf(stdout, "do_connect: do_connect: %d addr %s raw_addr %s addrlen %d\n",
+		socket,
+		addr_str,
+		addr_raw,
+		addrlen);
+
+	if (fd_get(socket, &fd) == fd_normal) {
+		if (fd_gets(socket) == fd_tiaccoon) {
+			ret = real.connect(fd, addr, addrlen); // tiaccoon
+			fprintf(stdout, "do_connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
+			if (ret && errno == ETRYRDMA) {
+			// if (ret) { // debug
+				addr_str = sockaddr2char(addr);
+				addr_raw = byte2char(addr->sa_data, addrlen);
+				fprintf(stdout, "do_connect: try rdma: %d addr %s raw_addr %s addrlen %d ret %d errno %d\n",
+					socket,
+					addr_str,
+					addr_raw,
+					addrlen,
+					ret,
+					errno); // TODO: Turn addr into virtual address
+				ret = transpose_socket(socket, fd_rsocket);
+				fprintf(stdout, "do_connect: transpose_socket to rsocket: %d\n", ret);
+				if (ret < 0)
+					return ret;
+
+				rclose(fd);
+				fd = ret;
+				ret = rconnect(fd, addr, addrlen);
+				fprintf(stdout, "do_connect: rconnect(tiaccoon): %d\n", ret);
+				if (!ret || errno == EINPROGRESS)
+					return ret;
+			}
+			fd_store(socket, fd, fd_normal, fd_ready);
+			fprintf(stdout, "do_connect: not rdma\n");
+			return ret;
+		} else if (fd_gets(socket) == fd_fork) {
+			fd_store(socket, fd, fd_normal, fd_fork_active);
+		}
+	} else { // fd_rsocket
+		fprintf(stdout, "do_connect: fd_rsocket\n");
 		ret = rconnect(fd, addr, addrlen);
+		fprintf(stdout, "do_connect: rconnect: %d\n", ret);
 		if (!ret || errno == EINPROGRESS)
 			return ret;
 
 		ret = transpose_socket(socket, fd_normal);
+		fprintf(stdout, "do_connect: transpose_socket to normal: %d\n", ret);
 		if (ret < 0)
 			return ret;
 
 		rclose(fd);
 		fd = ret;
-	} else if (fd_gets(socket) == fd_fork) {
-		fd_store(socket, fd, fd_normal, fd_fork_active);
 	}
 
-	return real.connect(fd, addr, addrlen);
+	ret = real.connect(fd, addr, addrlen);
+	fprintf(stdout, "do_connect: real.connect: %d %d errno %d\n", fd, ret, errno);
+	return ret;
 }
 
 ssize_t recv(int socket, void *buf, size_t len, int flags)

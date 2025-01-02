@@ -1381,21 +1381,26 @@ static int rs_do_connect(struct rsocket *rs)
 	struct rs_conn_data *creq, *cresp;
 	int to, ret;
 
+	fprintf(stdout, "rs_do_connect: rs_do_connect\n");
 	fastlock_acquire(&rs->slock);
 	switch (rs->state) {
 	case rs_init:
 	case rs_bound:
 resolve_addr:
+		fprintf(stdout, "rs_do_connect: rs_init rs_bound\n");
 		to = 1000 << rs->retries++;
 		ret = rdma_resolve_addr(rs->cm_id, NULL,
 					&rs->cm_id->route.addr.dst_addr, to);
+		fprintf(stdout, "rs_do_connect: rdma_resolve_addr: %d\n", ret);
 		if (!ret)
 			goto resolve_route;
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			rs->state = rs_resolving_addr;
 		break;
 	case rs_resolving_addr:
+		fprintf(stdout, "rs_do_connect: rs_resolving_addr\n");
 		ret = ucma_complete(rs->cm_id);
+		fprintf(stdout, "rs_do_connect: ucma_complete 1: %d\n", ret);
 		if (ret) {
 			if (errno == ETIMEDOUT && rs->retries <= RS_CONN_RETRIES)
 				goto resolve_addr;
@@ -1406,9 +1411,11 @@ resolve_addr:
 resolve_route:
 		to = 1000 << rs->retries++;
 		if (rs->optval) {
+			fprintf(stdout, "rs_do_connect: rs->optval true\n");
 			ret = rdma_set_option(rs->cm_id,  RDMA_OPTION_IB,
 					      RDMA_OPTION_IB_PATH, rs->optval,
 					      rs->optlen);
+			fprintf(stdout, "rs_do_connect: rdma_set_option: %d\n", ret);
 			free(rs->optval);
 			rs->optval = NULL;
 			if (!ret) {
@@ -1416,7 +1423,9 @@ resolve_route:
 				goto resolving_route;
 			}
 		} else {
+			fprintf(stdout, "rs_do_connect: rs->optval false\n");
 			ret = rdma_resolve_route(rs->cm_id, to);
+			fprintf(stdout, "rs_do_connect: rdma_resolve_route: %d\n", ret);
 			if (!ret)
 				goto do_connect;
 		}
@@ -1426,13 +1435,16 @@ resolve_route:
 	case rs_resolving_route:
 resolving_route:
 		ret = ucma_complete(rs->cm_id);
+		fprintf(stdout, "rs_do_connect: ucma_complete 2: %d\n", ret);
 		if (ret) {
 			if (errno == ETIMEDOUT && rs->retries <= RS_CONN_RETRIES)
 				goto resolve_route;
 			break;
 		}
 do_connect:
+		fprintf(stdout, "rs_do_connect: do_connect\n");
 		ret = rs_create_ep(rs);
+		fprintf(stdout, "rs_do_connect: rs_create_ep: %d\n", ret);
 		if (ret)
 			break;
 
@@ -1449,7 +1461,9 @@ do_connect:
 			param.initiator_depth = 1;
 		rs->retries = 0;
 
+		fprintf(stdout, "rs_do_connect: rdma_connect before\n");
 		ret = rdma_connect(rs->cm_id, &param);
+		fprintf(stdout, "rs_do_connect: rdma_connect: %d\n", ret);
 		if (!ret)
 			goto connected;
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -1719,12 +1733,15 @@ int rconnect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	struct rsocket *rs;
 	int ret, save_errno;
 
+	fprintf(stdout, "rconnect: rconnect: %d\n", socket);
 	rs = idm_lookup(&idm, socket);
+	fprintf(stdout, "rconnect: idm_lookup: %d\n", socket);
 	if (!rs)
 		return ERR(EBADF);
 	if (rs->type == SOCK_STREAM) {
 		memcpy(&rs->cm_id->route.addr.dst_addr, addr, addrlen);
 		ret = rs_do_connect(rs);
+		fprintf(stdout, "rconnect: rs_do_connect: %d\n", ret);
 		if (ret == -1 && errno == EINPROGRESS) {
 			save_errno = errno;
 			/* The app can still drive the CM state on failure */

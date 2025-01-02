@@ -1098,17 +1098,22 @@ int ucma_complete(struct rdma_cm_id *id)
 {
 	struct cma_id_private *id_priv;
 	int ret;
+	fprintf(stdout, "ucma_complete: ucma_complete\n");
 
 	id_priv = container_of(id, struct cma_id_private, id);
+	fprintf(stdout, "ucma_complete: container_of\n");
 	if (!id_priv->sync)
 		return 0;
 
 	if (id_priv->id.event) {
+		fprintf(stdout, "ucma_complete: id_priv->id.event true\n");
 		rdma_ack_cm_event(id_priv->id.event);
+		fprintf(stdout, "ucma_complete: rdma_ack_cm_event\n");
 		id_priv->id.event = NULL;
 	}
 
 	ret = rdma_get_cm_event(id_priv->id.channel, &id_priv->id.event);
+	fprintf(stdout, "ucma_complete: rdma_get_cm_event: %d\n", ret);
 	if (ret)
 		return ret;
 
@@ -1783,8 +1788,12 @@ int rdma_connect(struct rdma_cm_id *id, struct rdma_conn_param *conn_param)
 	struct cma_id_private *id_priv;
 	int ret;
 
+	fprintf(stdout, "rdma_connect: rdma_connect\n");
+
 	id_priv = container_of(id, struct cma_id_private, id);
+	fprintf(stdout, "rdma_connect: container_of\n");
 	ret = ucma_valid_param(id_priv, conn_param);
+	fprintf(stdout, "rdma_connect: ucma_valid_param: %d\n", ret);
 	if (ret)
 		return ret;
 
@@ -1798,6 +1807,7 @@ int rdma_connect(struct rdma_cm_id *id, struct rdma_conn_param *conn_param)
 		id_priv->responder_resources = id_priv->cma_dev->max_responder_resources;
 
 	CMA_INIT_CMD(&cmd, sizeof cmd, CONNECT);
+	fprintf(stdout, "rdma_connect: CMA_INIT_CMD\n");
 	cmd.id = id_priv->handle;
 	if (id->qp) {
 		qp_num = id->qp->qp_num;
@@ -1806,10 +1816,13 @@ int rdma_connect(struct rdma_cm_id *id, struct rdma_conn_param *conn_param)
 
 	ucma_copy_conn_param_to_kern(id_priv, &cmd.conn_param, conn_param,
 				     qp_num, srq);
+	fprintf(stdout, "rdma_connect: ucma_copy_conn_param_to_kern\n");
 
 	ucma_copy_ece_param_to_kern_req(id_priv, &cmd.ece);
+	fprintf(stdout, "rdma_connect: ucma_copy_ece_param_to_kern_req\n");
 
 	ret = write(id->channel->fd, &cmd, sizeof cmd);
+	fprintf(stdout, "rdma_connect: write: %d %d\n", ret, id->channel->fd);
 	if (ret != sizeof cmd)
 		return (ret >= 0) ? ERR(ENODATA) : -1;
 
@@ -1818,7 +1831,9 @@ int rdma_connect(struct rdma_cm_id *id, struct rdma_conn_param *conn_param)
 		id_priv->connect_len = 0;
 	}
 
-	return ucma_complete(id);
+	ret = ucma_complete(id);
+	fprintf(stdout, "rdma_connect: ucma_complete: %d\n", ret);
+	return ret;
 }
 
 int rdma_listen(struct rdma_cm_id *id, int backlog)
@@ -2490,7 +2505,9 @@ int rdma_get_cm_event(struct rdma_event_channel *channel,
 	struct cma_event *evt;
 	int ret;
 
+	fprintf(stdout, "rdma_get_cm_event: rdma_get_cm_event\n");
 	ret = ucma_init();
+	fprintf(stdout, "rdma_get_cm_event: ucma_init: %d\n", ret);
 	if (ret)
 		return ret;
 
@@ -2504,13 +2521,17 @@ int rdma_get_cm_event(struct rdma_event_channel *channel,
 retry:
 	memset(evt, 0, sizeof(*evt));
 	CMA_INIT_CMD_RESP(&cmd, sizeof cmd, GET_EVENT, &resp, sizeof resp);
+	fprintf(stdout, "rdma_get_cm_event: CMA_INIT_CMD_RESP\n");
+	fprintf(stdout, "rdma_get_cm_event: write before: %d\n", channel->fd);
 	ret = write(channel->fd, &cmd, sizeof cmd);
+	fprintf(stdout, "rdma_get_cm_event: write: %d %d\n", ret, channel->fd);
 	if (ret != sizeof cmd) {
 		free(evt);
 		return (ret >= 0) ? ERR(ENODATA) : -1;
 	}
 
 	VALGRIND_MAKE_MEM_DEFINED(&resp, sizeof resp);
+	fprintf(stdout, "rdma_get_cm_event: VALGRIND_MAKE_MEM_DEFINED\n");
 
 	evt->event.event = resp.event;
 	/*
@@ -2522,16 +2543,21 @@ retry:
 	 * the kernel should have done.
 	 */
 	if (resp.uid) {
+		fprintf(stdout, "rdma_get_cm_event: resp.uid true\n");
 		evt->id_priv = (void *) (uintptr_t) resp.uid;
 	} else {
+		fprintf(stdout, "rdma_get_cm_event: resp.uid false\n");
 		evt->id_priv = ucma_lookup_id(resp.id);
+		fprintf(stdout, "rdma_get_cm_event: ucma_lookup_id\n");
 		if (!evt->id_priv) {
 			syslog(LOG_WARNING, PFX "Warning: discarding unmatched "
 				"event - rdma_destroy_id may hang.\n");
 			goto retry;
 		}
 		if (resp.event != RDMA_CM_EVENT_ESTABLISHED) {
+			fprintf(stdout, "rdma_get_cm_event: ucma_complete_event before\n");
 			ucma_complete_event(evt->id_priv);
+			fprintf(stdout, "rdma_get_cm_event: ucma_complete_event after\n");
 			goto retry;
 		}
 	}
