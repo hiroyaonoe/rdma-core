@@ -154,7 +154,7 @@ static char *sockaddr2char(const struct sockaddr *addr) {
 
 	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
 	if (ret != 0) {
-		snprintf(result, sizeof(result), "getnameinfo: %s", gai_strerror(ret));
+		snprintf(result, sizeof(result), "getnameinfo: %s: %d: %s", gai_strerror(ret), addr->sa_family, addr->sa_data);
 		return result;
 	}
 
@@ -649,10 +649,11 @@ real:
 int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd, ret, domain, rfd, rsock;
-	char *addr_str;
+	char *addr_str, *addr_raw;
 	struct fd_info *fdi;
 	addr_str = sockaddr2char(addr);
-	fprintf(stdout, "bind: bind: %d addr %s addrlen %d\n", socket, addr_str, addrlen);
+	addr_raw = byte2char(addr->sa_data, addrlen);
+	fprintf(stdout, "bind: bind: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, addrlen);
 	if (fd_get(socket, &fd) == fd_rsocket) {
 		fprintf(stdout, "bind: fd_rsocket: %d %d\n", socket, fd);
 		ret = rbind(fd, addr, addrlen);
@@ -667,10 +668,12 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				addrlen = ret - ETRYRDMA;
 			// if (1) { // TODO: remove
 				addr_str = sockaddr2char(addr);
-				fprintf(stdout, "bind: try rdma: %d %d addr %s addrlen %d ret %d errno %d\n",
+				addr_raw = byte2char(addr->sa_data, addrlen);
+				fprintf(stdout, "bind: try rdma: %d %d addr %s raw_addr %s addrlen %d ret %d errno %d\n",
 					socket,
 					fd,
 					addr_str,
+					addr_raw,
 					addrlen,
 					ret,
 					errno); // TODO: Turn addr into virtual address again
