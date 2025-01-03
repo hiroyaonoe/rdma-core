@@ -859,8 +859,9 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 		if (fd_gets(socket) == fd_tiaccoon) {
 			ret = real.connect(fd, addr, addrlen); // tiaccoon
 			fprintf(stdout, "connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
-			if (ret && errno == ETRYRDMA) {
+			if (ret > ETRYRDMA) {
 			// if (1) { // debug
+				addrlen = ret - ETRYRDMA;
 				addr_str = sockaddr2char(addr);
 				addr_raw = byte2char(addr->sa_data, addrlen);
 				fprintf(stdout, "connect: try rdma: %d addr %s raw_addr %s addrlen %d ret %d errno %d\n",
