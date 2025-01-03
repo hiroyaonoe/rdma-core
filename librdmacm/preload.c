@@ -718,7 +718,7 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 
 int listen(int socket, int backlog)
 {
-	int fd, ret;
+	int fd, ret, retreal;
 	struct fd_info *fdi;
 	fprintf(stdout, "listen: listen: %d %d\n", socket, backlog);
 	if (fd_get(socket, &fd) == fd_rsocket) {
@@ -732,8 +732,8 @@ int listen(int socket, int backlog)
 		fprintf(stdout, "listen: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
 		if (fdi->realfd != -1) { // tiaccoon
 			fprintf(stdout, "listen: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
-			ret = real.listen(fdi->realfd, backlog);
-			fprintf(stdout, "listen: real.listen(tiaccoon): %d %d %d ret %d\n", socket, fd, ret, fdi->realfd);
+			retreal = real.listen(fdi->realfd, backlog);
+			fprintf(stdout, "listen: real.listen(tiaccoon): %d %d %d ret %d\n", socket, fd, retreal, fdi->realfd);
 			// TODO: accept queue
 			// return ret;
 		}
