@@ -124,7 +124,7 @@ struct fd_info {
 	enum fd_fork_state state;
 	int fd;
 	int dupfd;
-	int rfd;
+	int realfd;
 	_Atomic(int) refcnt;
 };
 
@@ -336,8 +336,8 @@ static int fd_open(void)
 	}
 
 	fdi->dupfd = -1;
-	fdi->rfd = -1;
-	fprintf(stdout, "fd_open: %d %d\n", index, fdi->rfd);
+	fdi->realfd = -1;
+	fprintf(stdout, "fd_open: %d %d\n", index, fdi->realfd);
 	atomic_store(&fdi->refcnt, 1);
 	pthread_mutex_lock(&mut);
 	ret = idm_set(&idm, index, fdi);
@@ -694,13 +694,13 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 					rclose(rfd);
 					return 0; // binded only real.socket
 				}
-				// fd_store(rsock, rfd, fd_rsocket, fd_ready);
+				fd_store(socket, rfd, fd_rsocket, fd_ready);
 				fdi = idm_at(&idm, socket);
 				if (!fdi) {
 					fprintf(stdout, "bind: idm_at failed: %d %d\n", socket, fd);
 					return ret;
 				}
-				fdi->rfd = rfd;
+				fdi->realfd = fd;
 				ret = rbind(rfd, addr, addrlen);
 				fprintf(stdout, "bind: rbind: %d %d ret %d\n", socket, fd, ret);
 				return ret;
@@ -724,25 +724,26 @@ int listen(int socket, int backlog)
 	if (fd_get(socket, &fd) == fd_rsocket) {
 		fprintf(stdout, "listen: fd_rsocket: %d %d\n", socket, fd);
 		ret = rlisten(fd, backlog);
-	} else { //fd_normal
-		fprintf(stdout, "listen: not fd_rsocket: %d %d\n", socket, fd);
-		ret = real.listen(fd, backlog);
-		fprintf(stdout, "listen: real.listen: %d %d ret %d\n", socket, fd, ret);
-		if (!ret && fd_gets(socket) == fd_fork) {
-			fprintf(stdout, "listen: fork: %d %d\n", socket, fd);
-			fd_store(socket, fd, fd_normal, fd_fork_listen);
-		}
 		fdi = idm_lookup(&idm, socket);
 		if (!fdi) {
 			fprintf(stdout, "listen: idm_lookup failed: %d %d\n", socket, fd);
 			return ret;
 		}
-		fprintf(stdout, "listen: idm_lookup: %d %d %d\n", socket, fd, fdi->rfd);
-		if (fd_gets(socket) == fd_tiaccoon && fdi->rfd != -1) {
-			fprintf(stdout, "listen: tiaccoon: %d %d\n", socket, fd);
-			ret = rlisten(fdi->rfd, backlog);
-			fprintf(stdout, "listen: rlisten: %d %d ret %d\n", socket, fd, ret);
+		fprintf(stdout, "listen: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
+		if (fdi->realfd != -1) { // tiaccoon
+			fprintf(stdout, "listen: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
+			ret = real.listen(fdi->realfd, backlog);
+			fprintf(stdout, "listen: real.listen(tiaccoon): %d %d %d ret %d\n", socket, fd, ret, fdi->realfd);
 			// TODO: accept queue
+			// return ret;
+		}
+	} else { //fd_normal
+		fprintf(stdout, "listen: not fd_rsocket: %d %d\n", socket, fd);\
+		ret = real.listen(fd, backlog);
+		fprintf(stdout, "listen: real.listen: %d %d ret %d\n", socket, fd, ret);
+		if (!ret && fd_gets(socket) == fd_fork) {
+			fprintf(stdout, "listen: fork: %d %d\n", socket, fd);
+			fd_store(socket, fd, fd_normal, fd_fork_listen);
 		}
 	}
 	return ret;
@@ -760,9 +761,22 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 		if (index < 0)
 			return index;
 
+		// TODO: accept queue
 		ret = raccept(fd, addr, addrlen);
+		fprintf(stdout, "accept: raccept: %d %d index %d ret %d\n", socket, fd, index, ret);
 		if (ret < 0) {
 			fd_close(index, &fd);
+			fdi = idm_lookup(&idm, socket);
+			if (!fdi) {
+				fprintf(stdout, "accept: idm_lookup failed: %d %d\n", socket, fd);
+				return ret;
+			}
+			fprintf(stdout, "accept: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
+			if (fdi->realfd != -1) {
+				fprintf(stdout, "accept: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
+				ret = real.accept(fdi->realfd, addr, addrlen);
+				fprintf(stdout, "accept: real.accept: %d %d %d ret %d\n", socket, fd, fdi->realfd, ret);
+			}
 			return ret;
 		}
 
@@ -782,35 +796,6 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 
 		fd_store(index, ret, fd_normal, fd_fork_passive);
 		return index;
-	} else if (fd_gets(socket) == fd_tiaccoon) {
-		fprintf(stdout, "accept: fd_tiaccoon: %d %d\n", socket, fd);
-		// TODO: accept queue
-		fdi = idm_lookup(&idm, socket);
-		if (!fdi) {
-			fprintf(stdout, "accept: idm_lookup failed: %d %d\n", socket, fd);
-			ret = real.accept(fd, addr, addrlen);
-			fprintf(stdout, "accept: real.accept: %d %d ret %d\n", socket, fd, ret);
-			return ret;
-		}
-		fprintf(stdout, "accept: idm_lookup: %d %d %d\n", socket, fd, fdi->rfd);
-		if (fdi->rfd != -1) {
-			fprintf(stdout, "accept: tiaccoon: %d %d\n", socket, fd);
-			ret = raccept(fdi->rfd, addr, addrlen);
-			if (ret < 0) {
-				fprintf(stdout, "accept: raccept failed: %d %d\n", socket, fd);
-				ret = real.accept(fd, addr, addrlen);
-				fprintf(stdout, "accept: real.accept: %d %d ret %d\n", socket, fd, ret);
-				return ret;
-			}
-			index = fd_open();
-			fprintf(stdout, "accept: fd_open: %d %d %d\n", socket, fd, index);
-			if (index < 0)
-				return index;
-			fd_store(index, ret, fd_rsocket, fd_ready);
-			return index;
-		}
-		ret = real.accept(fd, addr, addrlen);
-		return ret;
 	} else {
 		return real.accept(fd, addr, addrlen);
 	}
@@ -1257,8 +1242,8 @@ int close(int socket)
 			return ret;
 	}
 
-	if (fdi->rfd != -1) {
-		ret = rclose(fdi->rfd);
+	if (fdi->realfd != -1) {
+		ret = rclose(fdi->realfd);
 		if (ret)
 			return ret;
 	}
