@@ -124,6 +124,7 @@ struct fd_info {
 	enum fd_fork_state state;
 	int fd;
 	int dupfd;
+	int rfd;
 	_Atomic(int) refcnt;
 };
 
@@ -335,6 +336,8 @@ static int fd_open(void)
 	}
 
 	fdi->dupfd = -1;
+	fdi->rfd = -1;
+	fprintf(stdout, "fd_open: %d %d\n", index, fdi->rfd);
 	atomic_store(&fdi->refcnt, 1);
 	pthread_mutex_lock(&mut);
 	ret = idm_set(&idm, index, fdi);
@@ -645,20 +648,99 @@ real:
 
 int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
-	int fd;
-	return (fd_get(socket, &fd) == fd_rsocket) ?
-		rbind(fd, addr, addrlen) : real.bind(fd, addr, addrlen);
+	int fd, ret, domain, rfd, rsock;
+	char *addr_str;
+	struct fd_info *fdi;
+	addr_str = sockaddr2char(addr);
+	fprintf(stdout, "bind: bind: %d addr %s addrlen %d\n", socket, addr_str, addrlen);
+	if (fd_get(socket, &fd) == fd_rsocket) {
+		fprintf(stdout, "bind: fd_rsocket: %d %d\n", socket, fd);
+		ret = rbind(fd, addr, addrlen);
+		fprintf(stdout, "bind: rbind: %d %d ret %d\n", socket, fd, ret);
+		return ret;
+	} else {// fd_normal
+		if (fd_gets(socket) == fd_tiaccoon) {
+			fprintf(stdout, "bind: tiaccoon: %d %d\n", socket, fd);
+			ret = real.bind(fd, addr, addrlen);
+			fprintf(stdout, "bind: real.bind(tiaccoon): %d %d ret %d\n", socket, fd, ret);
+			if (ret > ETRYRDMA) {
+				addrlen = ret - ETRYRDMA;
+			// if (1) { // TODO: remove
+				addr_str = sockaddr2char(addr);
+				fprintf(stdout, "bind: try rdma: %d %d addr %s addrlen %d ret %d errno %d\n",
+					socket,
+					fd,
+					addr_str,
+					addrlen,
+					ret,
+					errno); // TODO: Turn addr into virtual address again
+				// rsock = fd_open();
+				// fprintf(stdout, "bind: fd_open: %d\n", rsock);
+				// if (rsock < 0)
+				// 	return 0; // binded only real.socket
+				rsock = 0; // TODO: remove
+				domain = (addrlen == sizeof(struct sockaddr_in6)) ? PF_INET6 : PF_INET;
+				fprintf(stdout, "bind: rsocket before: %d %d %d %d\n", rsock, domain ,SOCK_STREAM, 0);
+				rfd = rsocket(domain, SOCK_STREAM, 0);
+				fprintf(stdout, "bind: rsocket after: %d %d %d %d rfd %d\n", rsock, domain ,SOCK_STREAM, 0, rfd);
+				if (rfd < 0)
+					return 0; // binded only real.socket
+				ret = copysockopts(rfd, fd, &rs, &real);
+				fprintf(stdout, "bind: copysockopts: %d %d %d %d ret %d\n", socket, rsock, fd, rfd, ret);
+				if (ret) {
+					rclose(rfd);
+					return 0; // binded only real.socket
+				}
+				// fd_store(rsock, rfd, fd_rsocket, fd_ready);
+				fdi = idm_at(&idm, socket);
+				if (!fdi) {
+					fprintf(stdout, "bind: idm_at failed: %d %d\n", socket, fd);
+					return ret;
+				}
+				fdi->rfd = rfd;
+				ret = rbind(rfd, addr, addrlen);
+				fprintf(stdout, "bind: rbind: %d %d ret %d\n", socket, fd, ret);
+				return ret;
+			} else {
+				return ret;
+			}
+		} else {
+			fprintf(stdout, "bind: not tiaccoon: %d %d\n", socket, fd);
+			ret = real.bind(fd, addr, addrlen);
+			fprintf(stdout, "bind: real.bind(not tiaccoon): %d %d ret %d\n", socket, fd, ret);
+			return ret;
+		}
+	}
 }
 
 int listen(int socket, int backlog)
 {
 	int fd, ret;
+	struct fd_info *fdi;
+	fprintf(stdout, "listen: listen: %d %d\n", socket, backlog);
 	if (fd_get(socket, &fd) == fd_rsocket) {
+		fprintf(stdout, "listen: fd_rsocket: %d %d\n", socket, fd);
 		ret = rlisten(fd, backlog);
-	} else {
+	} else { //fd_normal
+		fprintf(stdout, "listen: not fd_rsocket: %d %d\n", socket, fd);
 		ret = real.listen(fd, backlog);
-		if (!ret && fd_gets(socket) == fd_fork)
+		fprintf(stdout, "listen: real.listen: %d %d ret %d\n", socket, fd, ret);
+		if (!ret && fd_gets(socket) == fd_fork) {
+			fprintf(stdout, "listen: fork: %d %d\n", socket, fd);
 			fd_store(socket, fd, fd_normal, fd_fork_listen);
+		}
+		fdi = idm_lookup(&idm, socket);
+		if (!fdi) {
+			fprintf(stdout, "listen: idm_lookup failed: %d %d\n", socket, fd);
+			return ret;
+		}
+		fprintf(stdout, "listen: idm_lookup: %d %d %d\n", socket, fd, fdi->rfd);
+		if (fd_gets(socket) == fd_tiaccoon && fdi->rfd != -1) {
+			fprintf(stdout, "listen: tiaccoon: %d %d\n", socket, fd);
+			ret = rlisten(fdi->rfd, backlog);
+			fprintf(stdout, "listen: rlisten: %d %d ret %d\n", socket, fd, ret);
+			// TODO: accept queue
+		}
 	}
 	return ret;
 }
@@ -666,8 +748,11 @@ int listen(int socket, int backlog)
 int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd, index, ret;
+	struct fd_info *fdi;
+	fprintf(stdout, "accept: accept: %d\n", socket);
 
 	if (fd_get(socket, &fd) == fd_rsocket) {
+		fprintf(stdout, "accept: fd_rsocket: %d %d\n", socket, fd);
 		index = fd_open();
 		if (index < 0)
 			return index;
@@ -681,6 +766,7 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 		fd_store(index, ret, fd_rsocket, fd_ready);
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
+		fprintf(stdout, "accept: fd_fork_listen: %d %d\n", socket, fd);
 		index = fd_open();
 		if (index < 0)
 			return index;
@@ -693,6 +779,35 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 
 		fd_store(index, ret, fd_normal, fd_fork_passive);
 		return index;
+	} else if (fd_gets(socket) == fd_tiaccoon) {
+		fprintf(stdout, "accept: fd_tiaccoon: %d %d\n", socket, fd);
+		// TODO: accept queue
+		fdi = idm_lookup(&idm, socket);
+		if (!fdi) {
+			fprintf(stdout, "accept: idm_lookup failed: %d %d\n", socket, fd);
+			ret = real.accept(fd, addr, addrlen);
+			fprintf(stdout, "accept: real.accept: %d %d ret %d\n", socket, fd, ret);
+			return ret;
+		}
+		fprintf(stdout, "accept: idm_lookup: %d %d %d\n", socket, fd, fdi->rfd);
+		if (fdi->rfd != -1) {
+			fprintf(stdout, "accept: tiaccoon: %d %d\n", socket, fd);
+			ret = raccept(fdi->rfd, addr, addrlen);
+			if (ret < 0) {
+				fprintf(stdout, "accept: raccept failed: %d %d\n", socket, fd);
+				ret = real.accept(fd, addr, addrlen);
+				fprintf(stdout, "accept: real.accept: %d %d ret %d\n", socket, fd, ret);
+				return ret;
+			}
+			index = fd_open();
+			fprintf(stdout, "accept: fd_open: %d %d %d\n", socket, fd, index);
+			if (index < 0)
+				return index;
+			fd_store(index, ret, fd_rsocket, fd_ready);
+			return index;
+		}
+		ret = real.accept(fd, addr, addrlen);
+		return ret;
 	} else {
 		return real.accept(fd, addr, addrlen);
 	}
@@ -870,7 +985,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 					addr_raw,
 					addrlen,
 					ret,
-					errno); // TODO: Turn addr into virtual address
+					errno); // TODO: Turn addr into virtual address again
 				ret = transpose_socket(socket, fd_rsocket);
 				fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
 				if (ret < 0)
@@ -1135,6 +1250,12 @@ int close(int socket)
 
 	if (fdi->dupfd != -1) {
 		ret = close(fdi->dupfd);
+		if (ret)
+			return ret;
+	}
+
+	if (fdi->rfd != -1) {
+		ret = rclose(fdi->rfd);
 		if (ret)
 			return ret;
 	}
