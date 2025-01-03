@@ -631,12 +631,12 @@ int socket(int domain, int type, int protocol)
 
 	recursive = 1;
 	ret = rsocket(domain, type, protocol);
-	fprintf(stdout, "socket: rsocket: %d\n", ret);
+	fprintf(stdout, "socket: rsocket after: %d\n", ret);
 	recursive = 0;
 	if (ret >= 0) {
 		fd_store(index, ret, fd_rsocket, fd_ready);
 		set_rsocket_options(ret);
-		fprintf(stdout, "socket: rsocket: %d\n", index);
+		fprintf(stdout, "socket: set_rsocket_options: %d\n", index);
 		return index;
 	}
 	fd_close(index, &ret);
