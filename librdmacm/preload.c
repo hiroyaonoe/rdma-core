@@ -125,6 +125,8 @@ struct fd_info {
 	int fd;
 	int dupfd;
 	int realfd;
+	struct sockaddr *vaddr;
+	socklen_t *vaddrlen;
 	_Atomic(int) refcnt;
 };
 
@@ -364,6 +366,28 @@ static void fd_store(int index, int fd, enum fd_type type, enum fd_fork_state st
 	fdi->state = state;
 }
 
+static void fd_store_vaddr(int index, const struct sockaddr *addr, socklen_t *addrlen)
+{
+	struct fd_info *fdi;
+	char *addr_str, *addr_raw;
+
+	fdi = idm_lookup(&idm, index);
+
+	if (!fdi->vaddr) {
+		fdi->vaddr = malloc(sizeof(struct sockaddr));
+	}
+	if (!fdi->vaddrlen) {
+		fdi->vaddrlen = malloc(sizeof(socklen_t));
+	}
+
+	memcpy(fdi->vaddr, addr, *addrlen);
+	memcpy(fdi->vaddrlen, addrlen, sizeof(socklen_t));
+
+	addr_str = sockaddr2char(fdi->vaddr);
+	addr_raw = byte2char(fdi->vaddr->sa_data, *fdi->vaddrlen);
+	fprintf(stdout, "fd_store_vaddr: fd_store_vaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *fdi->vaddrlen);
+}
+
 static inline enum fd_type fd_get(int index, int *fd)
 {
 	struct fd_info *fdi;
@@ -401,6 +425,24 @@ static inline enum fd_type fd_gett(int index)
 
 	fdi = idm_lookup(&idm, index);
 	return fdi ? fdi->type : fd_normal;
+}
+
+static inline int fd_getvaddr(int index, struct sockaddr *addr, socklen_t *addrlen)
+{
+	struct fd_info *fdi;
+	char *addr_str, *addr_raw;
+
+	fdi = idm_lookup(&idm, index);
+
+	if (fdi->vaddr && fdi->vaddrlen) {
+		memcpy(addr, fdi->vaddr, *fdi->vaddrlen);
+		memcpy(addrlen, fdi->vaddrlen, sizeof(socklen_t));
+		addr_str = sockaddr2char(addr);
+		addr_raw = byte2char(addr->sa_data, *addrlen);
+		fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
+		return 0;
+	}
+	return 1;
 }
 
 static enum fd_type fd_close(int index, int *fd)
@@ -662,6 +704,8 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	} else {// fd_normal
 		if (fd_gets(socket) == fd_tiaccoon) {
 			fprintf(stdout, "bind: tiaccoon: %d %d\n", socket, fd);
+			fd_store_vaddr(socket, addr, &addrlen);
+			fprintf(stdout, "bind: fd_store_vaddr: %d %d\n", socket, fd);
 			ret = real.bind(fd, addr, addrlen);
 			fprintf(stdout, "bind: real.bind(tiaccoon): %d %d ret %d\n", socket, fd, ret);
 			if (ret > ETRYRDMA) {
@@ -960,6 +1004,8 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 
 	if (fd_get(socket, &fd) == fd_normal) {
 		if (fd_gets(socket) == fd_tiaccoon) {
+			fd_store_vaddr(socket, addr, &addrlen);
+			fprintf(stdout, "connect: fd_store_vaddr: %d %d\n", socket, fd);
 			ret = real.connect(fd, addr, addrlen); // tiaccoon
 			fprintf(stdout, "connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
 			if (ret > ETRYRDMA) {
@@ -1254,6 +1300,12 @@ int close(int socket)
 	idm_clear(&idm, socket);
 	real.close(socket);
 	ret = (fdi->type == fd_rsocket) ? rclose(fdi->fd) : real.close(fdi->fd);
+	if (fdi->vaddr) {
+		free(fdi->vaddr);
+	}
+	if (fdi->vaddrlen) {
+		free(fdi->vaddrlen);
+	}
 	free(fdi);
 	return ret;
 }
@@ -1270,6 +1322,11 @@ int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd;
 	init_preload();
+
+	if (!fd_getvaddr(socket, addr, addrlen)) {
+		return 0;
+	}
+
 	return (fd_get(socket, &fd) == fd_rsocket) ?
 		rgetsockname(fd, addr, addrlen) :
 		real.getsockname(fd, addr, addrlen);
