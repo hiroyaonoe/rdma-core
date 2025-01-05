@@ -617,12 +617,14 @@ real:
 
 int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
-	int fd;
+	int fd, ret;
 	char *addr_str;
 	addr_str = sockaddr2char(addr);
 	fprintf(stdout, "bind: bind: %d addr %s addrlen %d\n", socket, addr_str, addrlen);
-	return (fd_get(socket, &fd) == fd_rsocket) ?
+	ret = (fd_get(socket, &fd) == fd_rsocket) ?
 		rbind(fd, addr, addrlen) : real.bind(fd, addr, addrlen);
+	fprintf(stdout, "bind: bind: %d ret %d errno %d\n", socket, ret, errno);
+	return ret;
 }
 
 int listen(int socket, int backlog)
