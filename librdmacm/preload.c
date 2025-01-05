@@ -371,7 +371,9 @@ static void fd_store_vaddr(int index, const struct sockaddr *addr, socklen_t *ad
 	struct fd_info *fdi;
 	char *addr_str, *addr_raw;
 
-	fdi = idm_lookup(&idm, index);
+	fprintf(stdout, "fd_store_vaddr: fd_store_vaddr :%d", index);
+
+	fdi = idm_at(&idm, index);
 
 	if (!fdi->vaddr) {
 		fdi->vaddr = malloc(sizeof(struct sockaddr));
@@ -431,8 +433,15 @@ static inline int fd_getvaddr(int index, struct sockaddr *addr, socklen_t *addrl
 {
 	struct fd_info *fdi;
 	char *addr_str, *addr_raw;
+	fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d", index);
 
 	fdi = idm_lookup(&idm, index);
+
+	if (!fdi) {
+		fprintf(stdout, "fd_getvaddr: not found fdi: %d", index);
+		return 1;
+	}
+	fprintf(stdout, "fd_getvaddr: found fdi: %d", index);
 
 	if (fdi->vaddr && fdi->vaddrlen) {
 		memcpy(addr, fdi->vaddr, *fdi->vaddrlen);
@@ -442,6 +451,7 @@ static inline int fd_getvaddr(int index, struct sockaddr *addr, socklen_t *addrl
 		fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
 		return 0;
 	}
+	fprintf(stdout, "fd_getvaddr: not found vaddr: %d", index);
 	return 1;
 }
 
@@ -1321,7 +1331,11 @@ int getpeername(int socket, struct sockaddr *addr, socklen_t *addrlen)
 int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd;
+	char *addr_str, *addr_raw;
 	init_preload();
+	addr_str = sockaddr2char(addr);
+	addr_raw = byte2char(addr->sa_data, *addrlen);
+	fprintf(stdout, "getsockname: getsockname: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, *addrlen);
 
 	if (!fd_getvaddr(socket, addr, addrlen)) {
 		return 0;
