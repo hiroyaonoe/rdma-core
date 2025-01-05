@@ -1330,6 +1330,7 @@ int close(int socket)
 {
 	struct fd_info *fdi;
 	int ret;
+	fprintf(stdout, "close: close: %d\n", socket);
 
 	init_preload();
 	fdi = idm_lookup(&idm, socket);
@@ -1343,10 +1344,12 @@ int close(int socket)
 	}
 
 	if (fdi->realfd != -1) {
-		ret = rclose(fdi->realfd);
+		fprintf(stdout, "close: real.close: %d\n", fdi->realfd);
+		ret = real.close(fdi->realfd);
 		if (ret)
 			return ret;
 	}
+	fprintf(stdout, "close: close: socket %d fdi->fd %d\n", socket, fdi->fd);
 
 	if (atomic_fetch_sub(&fdi->refcnt, 1) != 1)
 		return 0;

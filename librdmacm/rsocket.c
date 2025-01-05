@@ -3605,6 +3605,7 @@ static void ds_shutdown(struct rsocket *rs)
 int rclose(int socket)
 {
 	struct rsocket *rs;
+	fprintf(stdout, "rclose: rclose: %d\n", socket);
 
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
