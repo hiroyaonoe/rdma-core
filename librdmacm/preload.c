@@ -371,7 +371,7 @@ static void fd_store_vaddr(int index, const struct sockaddr *addr, socklen_t *ad
 	struct fd_info *fdi;
 	char *addr_str, *addr_raw;
 
-	fprintf(stdout, "fd_store_vaddr: fd_store_vaddr :%d", index);
+	fprintf(stdout, "fd_store_vaddr: fd_store_vaddr :%d\n", index);
 
 	fdi = idm_at(&idm, index);
 
@@ -433,15 +433,15 @@ static inline int fd_getvaddr(int index, struct sockaddr *addr, socklen_t *addrl
 {
 	struct fd_info *fdi;
 	char *addr_str, *addr_raw;
-	fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d", index);
+	fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d\n", index);
 
 	fdi = idm_lookup(&idm, index);
 
 	if (!fdi) {
-		fprintf(stdout, "fd_getvaddr: not found fdi: %d", index);
+		fprintf(stdout, "fd_getvaddr: not found fdi: %d\n", index);
 		return 1;
 	}
-	fprintf(stdout, "fd_getvaddr: found fdi: %d", index);
+	fprintf(stdout, "fd_getvaddr: found fdi: %d\n", index);
 
 	if (fdi->vaddr && fdi->vaddrlen) {
 		memcpy(addr, fdi->vaddr, *fdi->vaddrlen);
@@ -451,7 +451,7 @@ static inline int fd_getvaddr(int index, struct sockaddr *addr, socklen_t *addrl
 		fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
 		return 0;
 	}
-	fprintf(stdout, "fd_getvaddr: not found vaddr: %d", index);
+	fprintf(stdout, "fd_getvaddr: not found vaddr: %d\n", index);
 	return 1;
 }
 
@@ -715,7 +715,7 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 		if (fd_gets(socket) == fd_tiaccoon) {
 			fprintf(stdout, "bind: tiaccoon: %d %d\n", socket, fd);
 			fd_store_vaddr(socket, addr, &addrlen);
-			fprintf(stdout, "bind: fd_store_vaddr: %d %d\n", socket, fd);
+			fprintf(stdout, "bind: fd_store_vaddr 1: %d %d\n", socket, fd);
 			ret = real.bind(fd, addr, addrlen);
 			fprintf(stdout, "bind: real.bind(tiaccoon): %d %d ret %d\n", socket, fd, ret);
 			if (ret > ETRYRDMA) {
