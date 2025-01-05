@@ -713,7 +713,7 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	if (fd_get(socket, &fd) == fd_rsocket) {
 		fprintf(stdout, "bind: fd_rsocket: %d %d\n", socket, fd);
 		ret = rbind(fd, addr, addrlen);
-		fprintf(stdout, "bind: rbind: %d %d ret %d\n", socket, fd, ret);
+		fprintf(stdout, "bind: rbind: %d %d ret %d errno %d\n", socket, fd, ret, errno);
 		return ret;
 	} else {// fd_normal
 		if (fd_gets(socket) == fd_tiaccoon) {
@@ -768,7 +768,7 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				}
 				fdi->realfd = fd;
 				ret = rbind(rfd, paddr, paddrlen);
-				fprintf(stdout, "bind: rbind: %d %d ret %d\n", socket, fd, ret);
+				fprintf(stdout, "bind: rbind: %d %d ret %d errno %d\n", socket, fd, ret, errno);
 				addr_str = sockaddr2char(addr);
 				addr_raw = byte2char(addr->sa_data, addrlen);
 				fprintf(stdout, "bind: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
@@ -806,7 +806,7 @@ int listen(int socket, int backlog)
 		if (fdi->realfd != -1) { // tiaccoon
 			fprintf(stdout, "listen: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
 			retreal = real.listen(fdi->realfd, backlog);
-			fprintf(stdout, "listen: real.listen(tiaccoon): %d %d %d ret %d\n", socket, fd, retreal, fdi->realfd);
+			fprintf(stdout, "listen: real.listen(tiaccoon): %d %d %d ret %d\n", socket, fd, fdi->realfd, retreal);
 			// TODO: accept queue
 			// return ret;
 		}

@@ -148,6 +148,75 @@ int af_ib_support;
 static struct index_map ucma_idm;
 static fastlock_t idm_lock;
 
+static char* byte2char(const char *buf, size_t len) {
+    static char result[1024];
+    char *ptr = result;
+    size_t i;
+
+    for (i = 0; i < len; i++) {
+        ptr += snprintf(ptr, sizeof(result) - (ptr - result), "%.2x ", (unsigned char)buf[i]);
+        if (ptr - result >= sizeof(result)) {
+            break;
+        }
+    }
+
+    // Remove the trailing space
+    if (ptr != result && *(ptr - 1) == ' ') {
+        *(ptr - 1) = '\0';
+    } else {
+        *ptr = '\0';
+    }
+
+    return result;
+}
+
+static char *sockaddr_storage2char(const struct sockaddr_storage *addr_storage, uint16_t size) {
+	static char result[NI_MAXHOST + NI_MAXSERV + 32 + 1024];
+	char host[NI_MAXHOST], service[NI_MAXSERV];
+	int ret;
+	struct sockaddr *addr;
+	char *raw;
+
+	if (!addr_storage) {
+		snprintf(result, sizeof(result), "Address is NULL");
+		return result;
+	}
+
+	addr = (struct sockaddr *)addr_storage;
+
+	switch (addr->sa_family) {
+		case AF_UNIX:
+			snprintf(result, sizeof(result), "Unix Domain Socket: %d: %s", addr->sa_family, addr->sa_data);
+			return result;
+			break;
+	}
+
+	raw = byte2char(addr->sa_data, size-1);
+
+	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+	if (ret != 0) {
+		snprintf(result, sizeof(result), "getnameinfo: %s: %d: %s raw %s", gai_strerror(ret), addr->sa_family, addr->sa_data, raw);
+		return result;
+	}
+
+	switch (addr->sa_family) {
+		case AF_INET:
+			snprintf(result, sizeof(result), "IPv4 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		case AF_INET6:
+			snprintf(result, sizeof(result), "IPv6 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		case AF_IB:
+			snprintf(result, sizeof(result), "InfiniBand Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		default:
+			snprintf(result, sizeof(result), "Unknown Address Family: %d: %s raw %s", addr->sa_family, host, raw);
+			break;
+	}
+
+	return result;
+}
+
 static int check_abi_version_nl_cb(struct nl_msg *msg, void *data)
 {
 	struct nlattr *tb[RDMA_NLDEV_ATTR_MAX];
@@ -863,9 +932,14 @@ static int ucma_query_addr(struct rdma_cm_id *id)
 	struct ucma_abi_query cmd;
 	struct cma_id_private *id_priv;
 	int ret;
+	char *srcaddr_str, *dstaddr_str;
+
+	fprintf(stdout, "ucma_query_addr: ucma_query_addr: errno %d\n", errno);
 
 	CMA_INIT_CMD_RESP(&cmd, sizeof cmd, QUERY, &resp, sizeof resp);
+	fprintf(stdout, "ucma_query_addr: CMA_INIT_CMD_RESP: errno %d\n", errno);
 	id_priv = container_of(id, struct cma_id_private, id);
+	fprintf(stdout, "ucma_query_addr: container_of: errno %d\n", errno);
 	cmd.id = id_priv->handle;
 	cmd.option = UCMA_QUERY_ADDR;
 
@@ -874,25 +948,43 @@ static int ucma_query_addr(struct rdma_cm_id *id)
 	 * be left as is by the kernel.
 	 */
 	resp.ibdev_index = UCMA_INVALID_IB_INDEX;
+	fprintf(stdout, "ucma_query_addr: UCMA_INVALID_IB_INDEX: %d errno %d\n", UCMA_INVALID_IB_INDEX, errno);
 
 	ret = write(id->channel->fd, &cmd, sizeof cmd);
+	fprintf(stdout, "ucma_query_addr: write: ret %d size %ld errno %d\n", ret, sizeof cmd, errno);
 	if (ret != sizeof cmd)
 		return (ret >= 0) ? ERR(ENODATA) : -1;
 
 	VALGRIND_MAKE_MEM_DEFINED(&resp, sizeof resp);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: errno            %d\n", errno);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.node_guid   %lld\n", resp.node_guid);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.port_num    %d\n", resp.port_num);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.reserved    %d\n", resp.reserved);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.pkey        %d\n", resp.pkey);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.src_size    %d\n", resp.src_size);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.dst_size    %d\n", resp.dst_size);
+	srcaddr_str = sockaddr_storage2char(&resp.src_addr, resp.src_size);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.src_addr    %s\n", srcaddr_str);
+	dstaddr_str = sockaddr_storage2char(&resp.dst_addr, resp.dst_size);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.dst_addr    %s\n", dstaddr_str);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.ibdev_index %d\n", resp.ibdev_index);
+	fprintf(stdout, "ucma_query_addr: VALGRIND_MAKE_MEM_DEFINED: resp.reserved1   %d\n", resp.reserved1);
 
 	memcpy(&id->route.addr.src_addr, &resp.src_addr, resp.src_size);
 	memcpy(&id->route.addr.dst_addr, &resp.dst_addr, resp.dst_size);
 
 	if (!id_priv->cma_dev && resp.node_guid) {
+		fprintf(stdout, "ucma_query_addr: !id_priv->cma_dev && resp.node_guid: errno %d\n", errno);
 		ret = ucma_get_device(id_priv, resp.node_guid,
 				      resp.ibdev_index);
+		fprintf(stdout, "ucma_query_addr: ucma_get_device: ret %d errno %d\n", ret, errno);
 		if (ret)
 			return ret;
 		id->port_num = resp.port_num;
 		id->route.addr.addr.ibaddr.pkey = resp.pkey;
 	}
 
+	fprintf(stdout, "ucma_query_addr: not !id_priv->cma_dev && resp.node_guid: errno %d\n", errno);
 	return 0;
 }
 
@@ -1053,13 +1145,18 @@ static int rdma_bind_addr2(struct rdma_cm_id *id, struct sockaddr *addr,
 	struct cma_id_private *id_priv;
 	int ret;
 
+	fprintf(stdout, "rdma_bind_addr2: rdma_bind_addr2: errno %d\n", errno);
+
 	CMA_INIT_CMD(&cmd, sizeof cmd, BIND);
+	fprintf(stdout, "rdma_bind_addr2: CMA_INIT_CMD: errno %d\n", errno);
 	id_priv = container_of(id, struct cma_id_private, id);
+	fprintf(stdout, "rdma_bind_addr2: container_of: errno %d\n", errno);
 	cmd.id = id_priv->handle;
 	cmd.addr_size = addrlen;
 	memcpy(&cmd.addr, addr, addrlen);
 
 	ret = write(id->channel->fd, &cmd, sizeof cmd);
+	fprintf(stdout, "rdma_bind_addr2: write: ret %d size %ld errno %d\n", ret, sizeof cmd, errno);
 	if (ret != sizeof cmd)
 		return (ret >= 0) ? ERR(ENODATA) : -1;
 
@@ -1075,23 +1172,36 @@ int rdma_bind_addr(struct rdma_cm_id *id, struct sockaddr *addr)
 	struct cma_id_private *id_priv;
 	int ret, addrlen;
 
+	fprintf(stdout, "rdma_bind_addr: rdma_bind_addr: errno %d\n", errno);
 	addrlen = ucma_addrlen(addr);
+	fprintf(stdout, "rdma_bind_addr: ucma_addrlen: addrlen %d errno %d\n", addrlen, errno);
 	if (!addrlen)
 		return ERR(EINVAL);
 
-	if (af_ib_support)
+	if (af_ib_support) {
+		fprintf(stdout, "rdma_bind_addr: af_ib_support true: %d addrlen %d errno %d\n", af_ib_support, addrlen, errno);
 		return rdma_bind_addr2(id, addr, addrlen);
+	}
 
+	fprintf(stdout, "rdma_bind_addr: af_ib_support false: %d addrlen %d errno %d\n", af_ib_support, addrlen, errno);
 	CMA_INIT_CMD(&cmd, sizeof cmd, BIND_IP);
+	fprintf(stdout, "rdma_bind_addr: CMA_INIT_CMD: errno %d\n", errno);
 	id_priv = container_of(id, struct cma_id_private, id);
+	fprintf(stdout, "rdma_bind_addr: container_of: errno %d\n", errno);
 	cmd.id = id_priv->handle;
 	memcpy(&cmd.addr, addr, addrlen);
+	fprintf(stdout, "rdma_bind_addr: memcpy: errno %d\n", errno);
 
 	ret = write(id->channel->fd, &cmd, sizeof cmd);
-	if (ret != sizeof cmd)
+	fprintf(stdout, "rdma_bind_addr: write: ret %d errno %d\n", ret, errno);
+	if (ret != sizeof cmd) {
+		fprintf(stdout, "rdma_bind_addr: ret != sizeof cmd: ret %d errno %d\n", ret, errno);
 		return (ret >= 0) ? ERR(ENODATA) : -1;
+	}
 
-	return ucma_query_route(id);
+	ret = ucma_query_route(id);
+	fprintf(stdout, "rdma_bind_addr: ucma_query_route: ret %d errno %d\n", ret, errno);
+	return ret;
 }
 
 int ucma_complete(struct rdma_cm_id *id)

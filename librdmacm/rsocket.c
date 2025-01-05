@@ -1239,22 +1239,31 @@ int rbind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	struct rsocket *rs;
 	int ret;
+	fprintf(stdout, "rbind: rbind: %d\n", socket);
 
 	rs = idm_lookup(&idm, socket);
-	if (!rs)
+	if (!rs) {
+		fprintf(stdout, "rbind: !rs: %d\n", socket);
 		return ERR(EBADF);
+	}
 	if (rs->type == SOCK_STREAM) {
+		fprintf(stdout, "rbind: SOCK_STREAM: %d\n", socket);
 		ret = rdma_bind_addr(rs->cm_id, (struct sockaddr *) addr);
+		fprintf(stdout, "rbind: rdma_bind_addr: %d ret %d errno %d\n", socket, ret, errno);
 		if (!ret)
 			rs->state = rs_bound;
 	} else {
+		fprintf(stdout, "rbind: not SOCK_STREAM: %d\n", socket);
 		if (rs->state == rs_init) {
 			ret = ds_init_ep(rs);
+			fprintf(stdout, "rbind: ds_init_ep: %d ret %d errno %d\n", socket, ret, errno);
 			if (ret)
 				return ret;
 		}
 		ret = bind(rs->udp_sock, addr, addrlen);
+		fprintf(stdout, "rbind: real.bind: %d ret %d errno %d\n", socket, ret, errno);
 	}
+	fprintf(stdout, "rbind: rbind ret: %d ret %d errno %d\n", socket, ret, errno);
 	return ret;
 }
 
@@ -1353,6 +1362,8 @@ int raccept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	struct rsocket *rs, *new_rs;
 	int ret;
+
+	fprintf(stdout, "raccept: raccept: %d", socket);
 
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
