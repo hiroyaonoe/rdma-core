@@ -131,6 +131,47 @@ struct config_entry {
 	int protocol;
 };
 
+static char *sockaddr2char(const struct sockaddr *addr) {
+	static char result[NI_MAXHOST + NI_MAXSERV + 32];
+	char host[NI_MAXHOST], service[NI_MAXSERV];
+	int ret;
+
+	if (!addr) {
+		snprintf(result, sizeof(result), "Address is NULL");
+		return result;
+	}
+
+	switch (addr->sa_family) {
+		case AF_UNIX:
+			snprintf(result, sizeof(result), "Unix Domain Socket: %d: %s", addr->sa_family, addr->sa_data);
+			return result;
+			break;
+	}
+
+	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+	if (ret != 0) {
+		snprintf(result, sizeof(result), "getnameinfo: %s: %d: %s", gai_strerror(ret), addr->sa_family, addr->sa_data);
+		return result;
+	}
+
+	switch (addr->sa_family) {
+		case AF_INET:
+			snprintf(result, sizeof(result), "IPv4 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		case AF_INET6:
+			snprintf(result, sizeof(result), "IPv6 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		case AF_IB:
+			snprintf(result, sizeof(result), "InfiniBand Address: %d: %s, Port: %s", addr->sa_family, host, service);
+			break;
+		default:
+			snprintf(result, sizeof(result), "Unknown Address Family: %d: %s", addr->sa_family, host);
+			break;
+	}
+
+	return result;
+}
+
 static struct config_entry *config;
 static int config_cnt;
 
@@ -577,6 +618,9 @@ real:
 int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd;
+	char *addr_str;
+	addr_str = sockaddr2char(addr);
+	fprintf(stdout, "bind: bind: %d addr %s addrlen %d\n", socket, addr_str, addrlen);
 	return (fd_get(socket, &fd) == fd_rsocket) ?
 		rbind(fd, addr, addrlen) : real.bind(fd, addr, addrlen);
 }
@@ -789,8 +833,9 @@ static inline enum fd_type fd_fork_get(int index, int *fd)
 int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd, ret;
-
-	fprintf(stdout, "connect: connect: %d\n", socket);
+	char *addr_str;
+	addr_str = sockaddr2char(addr);
+	fprintf(stdout, "connect: connect: %d addr %s addrlen %d\n", socket, addr_str, addrlen);
 	if (fd_get(socket, &fd) == fd_rsocket) {
 		ret = rconnect(fd, addr, addrlen);
 		fprintf(stdout, "connect: rconnect: %d %d %d %d\n", socket, fd, ret, errno);
@@ -1065,11 +1110,17 @@ int getpeername(int socket, struct sockaddr *addr, socklen_t *addrlen)
 
 int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
-	int fd;
+	int fd, ret;
 	init_preload();
-	return (fd_get(socket, &fd) == fd_rsocket) ?
+	char *addr_str;
+	addr_str = sockaddr2char(addr);
+	fprintf(stdout, "getsockname: getsockname: %d addr %s addrlen %d\n", socket, addr_str, *addrlen);
+	ret = (fd_get(socket, &fd) == fd_rsocket) ?
 		rgetsockname(fd, addr, addrlen) :
 		real.getsockname(fd, addr, addrlen);
+	addr_str = sockaddr2char(addr);
+	fprintf(stdout, "getsockname: after: %d addr %s addrlen %d ret %d\n", socket, addr_str, *addrlen, ret);
+	return ret;
 }
 
 int setsockopt(int socket, int level, int optname,
