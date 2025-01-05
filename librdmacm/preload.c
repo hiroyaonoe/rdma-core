@@ -606,6 +606,8 @@ static int transpose_socket(int socket, enum fd_type new_type)
 	int sfd, dfd, param, ret;
 	struct socket_calls *sapi, *dapi;
 
+	fprintf(stdout, "transpose_socket: transpose_socket: %d %d\n", socket, new_type);
+
 	sfd = fd_getd(socket);
 	if (new_type == fd_rsocket) {
 		dapi = &rs;
@@ -700,7 +702,9 @@ real:
 
 int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
-	int fd, ret, domain, rfd, rsock;
+	int fd, ret, ret2, domain, rfd, rsock;
+	struct sockaddr *paddr;
+	socklen_t paddrlen;
 	char *addr_str, *addr_raw;
 	struct fd_info *fdi;
 	addr_str = sockaddr2char(addr);
@@ -716,27 +720,35 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 			fprintf(stdout, "bind: tiaccoon: %d %d\n", socket, fd);
 			fd_store_vaddr(socket, addr, &addrlen);
 			fprintf(stdout, "bind: fd_store_vaddr 1: %d %d\n", socket, fd);
-			ret = real.bind(fd, addr, addrlen);
+			paddr = malloc(sizeof(struct sockaddr));
+			paddrlen = sizeof(struct sockaddr);
+			ret2 = fd_getvaddr(socket, paddr, &paddrlen); // Use physical addr
+			if (ret2) {
+				fprintf(stdout, "bind: fd_getvaddr failed: %d %d\n", socket, fd);
+				return ret2;
+			}
+			fprintf(stdout, "bind: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
+			ret = real.bind(fd, paddr, paddrlen);
 			fprintf(stdout, "bind: real.bind(tiaccoon): %d %d ret %d\n", socket, fd, ret);
 			if (ret > ETRYRDMA) {
-				addrlen = ret - ETRYRDMA;
+				paddrlen = ret - ETRYRDMA;
 			// if (1) { // TODO: remove
-				addr_str = sockaddr2char(addr);
-				addr_raw = byte2char(addr->sa_data, addrlen);
-				fprintf(stdout, "bind: try rdma: %d %d addr %s raw_addr %s addrlen %d ret %d errno %d\n",
+				addr_str = sockaddr2char(paddr);
+				addr_raw = byte2char(paddr->sa_data, paddrlen);
+				fprintf(stdout, "bind: try rdma: %d %d paddr %s raw_paddr %s paddrlen %d ret %d errno %d\n",
 					socket,
 					fd,
 					addr_str,
 					addr_raw,
-					addrlen,
+					paddrlen,
 					ret,
-					errno); // TODO: Turn addr into virtual address again
+					errno);
 				// rsock = fd_open();
 				// fprintf(stdout, "bind: fd_open: %d\n", rsock);
 				// if (rsock < 0)
 				// 	return 0; // binded only real.socket
 				rsock = 0; // TODO: remove
-				domain = (addrlen == sizeof(struct sockaddr_in6)) ? PF_INET6 : PF_INET;
+				domain = (paddrlen == sizeof(struct sockaddr_in6)) ? PF_INET6 : PF_INET;
 				fprintf(stdout, "bind: rsocket before: %d %d %d %d\n", rsock, domain ,SOCK_STREAM, 0);
 				rfd = rsocket(domain, SOCK_STREAM, 0);
 				fprintf(stdout, "bind: rsocket after: %d %d %d %d rfd %d\n", rsock, domain ,SOCK_STREAM, 0, rfd);
@@ -755,8 +767,15 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 					return ret;
 				}
 				fdi->realfd = fd;
-				ret = rbind(rfd, addr, addrlen);
+				ret = rbind(rfd, paddr, paddrlen);
 				fprintf(stdout, "bind: rbind: %d %d ret %d\n", socket, fd, ret);
+				addr_str = sockaddr2char(addr);
+				addr_raw = byte2char(addr->sa_data, addrlen);
+				fprintf(stdout, "bind: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
+					socket,
+					addr_str,
+					addr_raw,
+					addrlen);
 				return ret;
 			} else {
 				return ret;
@@ -807,6 +826,8 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd, index, ret;
 	struct fd_info *fdi;
+	struct sockaddr *srcvaddr;
+	socklen_t *srcvaddrlen;
 	fprintf(stdout, "accept: accept: %d\n", socket);
 
 	if (fd_get(socket, &fd) == fd_rsocket) {
@@ -833,8 +854,13 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 			}
 			return ret;
 		}
+		srcvaddr = malloc(sizeof(struct sockaddr));
+		srcvaddrlen = malloc(sizeof(socklen_t));
+		fd_getvaddr(socket, srcvaddr, srcvaddrlen);
+		fprintf(stdout, "accept: fd_getvaddr: %d %d %d\n", socket, fd, index);
 
 		fd_store(index, ret, fd_rsocket, fd_ready);
+		fd_store_vaddr(index, srcvaddr, srcvaddrlen);
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
 		fprintf(stdout, "accept: fd_fork_listen: %d %d\n", socket, fd);
@@ -1001,7 +1027,9 @@ static inline enum fd_type fd_fork_get(int index, int *fd)
 
 int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
-	int fd, ret;
+	int fd, ret, ret2;
+	struct sockaddr *paddr;
+	socklen_t paddrlen;
 	char *addr_str, *addr_raw;
 
 	addr_str = sockaddr2char(addr);
@@ -1016,20 +1044,28 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 		if (fd_gets(socket) == fd_tiaccoon) {
 			fd_store_vaddr(socket, addr, &addrlen);
 			fprintf(stdout, "connect: fd_store_vaddr: %d %d\n", socket, fd);
-			ret = real.connect(fd, addr, addrlen); // tiaccoon
+			paddr = malloc(sizeof(struct sockaddr));
+			paddrlen = sizeof(struct sockaddr);
+			ret2 = fd_getvaddr(socket, paddr, &paddrlen); // Use physical addr
+			if (ret2) {
+				fprintf(stdout, "connect: fd_getvaddr failed: %d %d\n", socket, fd);
+				return ret2;
+			}
+			fprintf(stdout, "connect: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
+			ret = real.connect(fd, paddr, paddrlen); // tiaccoon
 			fprintf(stdout, "connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
 			if (ret > ETRYRDMA) {
-				addrlen = ret - ETRYRDMA;
+				paddrlen = ret - ETRYRDMA;
 			// if (1) { // debug
-				addr_str = sockaddr2char(addr);
-				addr_raw = byte2char(addr->sa_data, addrlen);
-				fprintf(stdout, "connect: try rdma: %d addr %s raw_addr %s addrlen %d ret %d errno %d\n",
+				addr_str = sockaddr2char(paddr);
+				addr_raw = byte2char(paddr->sa_data, paddrlen);
+				fprintf(stdout, "connect: try rdma: %d paddr %s raw_paddr %s paddrlen %d ret %d errno %d\n",
 					socket,
 					addr_str,
 					addr_raw,
-					addrlen,
+					paddrlen,
 					ret,
-					errno); // TODO: Turn addr into virtual address again
+					errno);
 				ret = transpose_socket(socket, fd_rsocket);
 				fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
 				if (ret < 0)
@@ -1037,10 +1073,18 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 
 				rclose(fd);
 				fd = ret;
-				ret = rconnect(fd, addr, addrlen);
+				ret = rconnect(fd, paddr, paddrlen);
 				fprintf(stdout, "connect: rconnect(tiaccoon): %d\n", ret);
-				if (!ret || errno == EINPROGRESS)
+				if (!ret || errno == EINPROGRESS) {
+					addr_str = sockaddr2char(addr);
+					addr_raw = byte2char(addr->sa_data, addrlen);
+					fprintf(stdout, "connect: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
+						socket,
+						addr_str,
+						addr_raw,
+						addrlen);
 					return ret;
+				}
 			}
 			fd_store(socket, fd, fd_normal, fd_ready);
 			fprintf(stdout, "connect: not rdma\n");
@@ -1340,6 +1384,8 @@ int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 	if (!fd_getvaddr(socket, addr, addrlen)) {
 		return 0;
 	}
+
+	fprintf(stdout, "getsockname: normal getsockname: %d\n", socket);
 
 	return (fd_get(socket, &fd) == fd_rsocket) ?
 		rgetsockname(fd, addr, addrlen) :
