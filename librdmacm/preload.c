@@ -137,68 +137,68 @@ struct config_entry {
 	int protocol;
 };
 
-static char *sockaddr2char(const struct sockaddr *addr) {
-	static char result[NI_MAXHOST + NI_MAXSERV + 32];
-	char host[NI_MAXHOST], service[NI_MAXSERV];
-	int ret;
+// static char *sockaddr2char(const struct sockaddr *addr) {
+// 	static char result[NI_MAXHOST + NI_MAXSERV + 32];
+// 	char host[NI_MAXHOST], service[NI_MAXSERV];
+// 	int ret;
 
-	if (!addr) {
-		snprintf(result, sizeof(result), "Address is NULL");
-		return result;
-	}
+// 	if (!addr) {
+// 		snprintf(result, sizeof(result), "Address is NULL");
+// 		return result;
+// 	}
 
-	switch (addr->sa_family) {
-		case AF_UNIX:
-			snprintf(result, sizeof(result), "Unix Domain Socket: %d: %s", addr->sa_family, addr->sa_data);
-			return result;
-			break;
-	}
+// 	switch (addr->sa_family) {
+// 		case AF_UNIX:
+// 			snprintf(result, sizeof(result), "Unix Domain Socket: %d: %s", addr->sa_family, addr->sa_data);
+// 			return result;
+// 			break;
+// 	}
 
-	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
-	if (ret != 0) {
-		snprintf(result, sizeof(result), "getnameinfo: %s: %d: %s", gai_strerror(ret), addr->sa_family, addr->sa_data);
-		return result;
-	}
+// 	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+// 	if (ret != 0) {
+// 		snprintf(result, sizeof(result), "getnameinfo: %s: %d: %s", gai_strerror(ret), addr->sa_family, addr->sa_data);
+// 		return result;
+// 	}
 
-	switch (addr->sa_family) {
-		case AF_INET:
-			snprintf(result, sizeof(result), "IPv4 Address: %d: %s, Port: %s", addr->sa_family, host, service);
-			break;
-		case AF_INET6:
-			snprintf(result, sizeof(result), "IPv6 Address: %d: %s, Port: %s", addr->sa_family, host, service);
-			break;
-		case AF_IB:
-			snprintf(result, sizeof(result), "InfiniBand Address: %d: %s, Port: %s", addr->sa_family, host, service);
-			break;
-		default:
-			snprintf(result, sizeof(result), "Unknown Address Family: %d: %s", addr->sa_family, host);
-			break;
-	}
+// 	switch (addr->sa_family) {
+// 		case AF_INET:
+// 			snprintf(result, sizeof(result), "IPv4 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+// 			break;
+// 		case AF_INET6:
+// 			snprintf(result, sizeof(result), "IPv6 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+// 			break;
+// 		case AF_IB:
+// 			snprintf(result, sizeof(result), "InfiniBand Address: %d: %s, Port: %s", addr->sa_family, host, service);
+// 			break;
+// 		default:
+// 			snprintf(result, sizeof(result), "Unknown Address Family: %d: %s", addr->sa_family, host);
+// 			break;
+// 	}
 
-	return result;
-}
+// 	return result;
+// }
 
-static char* byte2char(const char *buf, size_t len) {
-    static char result[1024];
-    char *ptr = result;
-    size_t i;
+// static char* byte2char(const char *buf, size_t len) {
+//     static char result[1024];
+//     char *ptr = result;
+//     size_t i;
 
-    for (i = 0; i < len; i++) {
-        ptr += snprintf(ptr, sizeof(result) - (ptr - result), "%.2x ", (unsigned char)buf[i]);
-        if (ptr - result >= sizeof(result)) {
-            break;
-        }
-    }
+//     for (i = 0; i < len; i++) {
+//         ptr += snprintf(ptr, sizeof(result) - (ptr - result), "%.2x ", (unsigned char)buf[i]);
+//         if (ptr - result >= sizeof(result)) {
+//             break;
+//         }
+//     }
 
-    // Remove the trailing space
-    if (ptr != result && *(ptr - 1) == ' ') {
-        *(ptr - 1) = '\0';
-    } else {
-        *ptr = '\0';
-    }
+//     // Remove the trailing space
+//     if (ptr != result && *(ptr - 1) == ' ') {
+//         *(ptr - 1) = '\0';
+//     } else {
+//         *ptr = '\0';
+//     }
 
-    return result;
-}
+//     return result;
+// }
 
 
 static struct config_entry *config;
@@ -339,7 +339,7 @@ static int fd_open(void)
 
 	fdi->dupfd = -1;
 	fdi->realfd = -1;
-	fprintf(stdout, "fd_open: %d %d\n", index, fdi->realfd);
+	// fprintf(stdout, "fd_open: %d %d\n", index, fdi->realfd);
 	atomic_store(&fdi->refcnt, 1);
 	pthread_mutex_lock(&mut);
 	ret = idm_set(&idm, index, fdi);
@@ -369,9 +369,9 @@ static void fd_store(int index, int fd, enum fd_type type, enum fd_fork_state st
 static void fd_store_vaddr(int index, const struct sockaddr *addr, socklen_t *addrlen)
 {
 	struct fd_info *fdi;
-	char *addr_str, *addr_raw;
+	// char *addr_str, *addr_raw;
 
-	fprintf(stdout, "fd_store_vaddr: fd_store_vaddr :%d\n", index);
+	// fprintf(stdout, "fd_store_vaddr: fd_store_vaddr :%d\n", index);
 
 	fdi = idm_at(&idm, index);
 
@@ -385,9 +385,9 @@ static void fd_store_vaddr(int index, const struct sockaddr *addr, socklen_t *ad
 	memcpy(fdi->vaddr, addr, *addrlen);
 	memcpy(fdi->vaddrlen, addrlen, sizeof(socklen_t));
 
-	addr_str = sockaddr2char(fdi->vaddr);
-	addr_raw = byte2char(fdi->vaddr->sa_data, *fdi->vaddrlen);
-	fprintf(stdout, "fd_store_vaddr: fd_store_vaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *fdi->vaddrlen);
+	// addr_str = sockaddr2char(fdi->vaddr);
+	// addr_raw = byte2char(fdi->vaddr->sa_data, *fdi->vaddrlen);
+	// fprintf(stdout, "fd_store_vaddr: fd_store_vaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *fdi->vaddrlen);
 }
 
 static inline enum fd_type fd_get(int index, int *fd)
@@ -432,26 +432,26 @@ static inline enum fd_type fd_gett(int index)
 static inline int fd_getvaddr(int index, struct sockaddr *addr, socklen_t *addrlen)
 {
 	struct fd_info *fdi;
-	char *addr_str, *addr_raw;
-	fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d\n", index);
+	// char *addr_str, *addr_raw;
+	// fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d\n", index);
 
 	fdi = idm_lookup(&idm, index);
 
 	if (!fdi) {
-		fprintf(stdout, "fd_getvaddr: not found fdi: %d\n", index);
+		// fprintf(stdout, "fd_getvaddr: not found fdi: %d\n", index);
 		return 1;
 	}
-	fprintf(stdout, "fd_getvaddr: found fdi: %d\n", index);
+	// fprintf(stdout, "fd_getvaddr: found fdi: %d\n", index);
 
 	if (fdi->vaddr && fdi->vaddrlen) {
 		memcpy(addr, fdi->vaddr, *fdi->vaddrlen);
 		memcpy(addrlen, fdi->vaddrlen, sizeof(socklen_t));
-		addr_str = sockaddr2char(addr);
-		addr_raw = byte2char(addr->sa_data, *addrlen);
-		fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
+		// addr_str = sockaddr2char(addr);
+		// addr_raw = byte2char(addr->sa_data, *addrlen);
+		// fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
 		return 0;
 	}
-	fprintf(stdout, "fd_getvaddr: not found vaddr: %d\n", index);
+	// fprintf(stdout, "fd_getvaddr: not found vaddr: %d\n", index);
 	return 1;
 }
 
@@ -620,7 +620,7 @@ static int transpose_socket(int socket, enum fd_type new_type)
 	int sfd, dfd, param, ret;
 	struct socket_calls *sapi, *dapi;
 
-	fprintf(stdout, "transpose_socket: transpose_socket: %d %d\n", socket, new_type);
+	// fprintf(stdout, "transpose_socket: transpose_socket: %d %d\n", socket, new_type);
 
 	sfd = fd_getd(socket);
 	if (new_type == fd_rsocket) {
@@ -672,7 +672,7 @@ int socket(int domain, int type, int protocol)
 	static __thread int recursive;
 	int index, ret;
 
-	fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
+	// fprintf(stdout, "socket: socket: %d %d %d\n", domain, type, protocol);
 	init_preload();
 
 	if (recursive || !intercept_socket(domain, type, protocol))
@@ -688,10 +688,10 @@ int socket(int domain, int type, int protocol)
 		if (ret < 0)
 			return ret;
 		if (fork_support) {
-			fprintf(stdout, "socket: fork_support: %d\n", index);
+			// fprintf(stdout, "socket: fork_support: %d\n", index);
 			fd_store(index, ret, fd_normal, fd_fork);
 		} else {
-			fprintf(stdout, "socket: tiaccoon: %d\n", index);
+			// fprintf(stdout, "socket: tiaccoon: %d\n", index);
 			fd_store(index, ret, fd_normal, fd_tiaccoon);
 		}
 		return index;
@@ -699,77 +699,78 @@ int socket(int domain, int type, int protocol)
 
 	recursive = 1;
 	ret = rsocket(domain, type, protocol);
-	fprintf(stdout, "socket: rsocket after: %d\n", ret);
+	// fprintf(stdout, "socket: rsocket after: %d\n", ret);
 	recursive = 0;
 	if (ret >= 0) {
 		fd_store(index, ret, fd_rsocket, fd_ready);
 		set_rsocket_options(ret);
-		fprintf(stdout, "socket: set_rsocket_options: %d\n", index);
+		// fprintf(stdout, "socket: set_rsocket_options: %d\n", index);
 		return index;
 	}
 	fd_close(index, &ret);
 real:
 	ret = real.socket(domain, type, protocol);
-	fprintf(stdout, "socket: real.socket: %d\n", ret);
+	// fprintf(stdout, "socket: real.socket: %d\n", ret);
 	return ret;
 }
 
 int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
-	int fd, ret, ret2, domain, rfd, rsock;
+	int fd, ret, ret2, domain, rfd;
+	// int rsock;
 	struct sockaddr *paddr;
 	socklen_t paddrlen;
-	char *addr_str, *addr_raw;
+	// char *addr_str, *addr_raw;
 	struct fd_info *fdi;
-	addr_str = sockaddr2char(addr);
-	addr_raw = byte2char(addr->sa_data, addrlen);
-	fprintf(stdout, "bind: bind: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, addrlen);
+	// addr_str = sockaddr2char(addr);
+	// addr_raw = byte2char(addr->sa_data, addrlen);
+	// fprintf(stdout, "bind: bind: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, addrlen);
 	if (fd_get(socket, &fd) == fd_rsocket) {
-		fprintf(stdout, "bind: fd_rsocket: %d %d\n", socket, fd);
+		// fprintf(stdout, "bind: fd_rsocket: %d %d\n", socket, fd);
 		ret = rbind(fd, addr, addrlen);
-		fprintf(stdout, "bind: rbind: %d %d ret %d errno %d\n", socket, fd, ret, errno);
+		// fprintf(stdout, "bind: rbind: %d %d ret %d errno %d\n", socket, fd, ret, errno);
 		return ret;
 	} else {// fd_normal
 		if (fd_gets(socket) == fd_tiaccoon) {
-			fprintf(stdout, "bind: tiaccoon: %d %d\n", socket, fd);
+			// fprintf(stdout, "bind: tiaccoon: %d %d\n", socket, fd);
 			fd_store_vaddr(socket, addr, &addrlen);
-			fprintf(stdout, "bind: fd_store_vaddr 1: %d %d\n", socket, fd);
+			// fprintf(stdout, "bind: fd_store_vaddr 1: %d %d\n", socket, fd);
 			paddr = malloc(sizeof(struct sockaddr));
 			paddrlen = sizeof(struct sockaddr);
 			ret2 = fd_getvaddr(socket, paddr, &paddrlen); // Use physical addr
 			if (ret2) {
-				fprintf(stdout, "bind: fd_getvaddr failed: %d %d\n", socket, fd);
+				// fprintf(stdout, "bind: fd_getvaddr failed: %d %d\n", socket, fd);
 				return ret2;
 			}
-			fprintf(stdout, "bind: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
+			// fprintf(stdout, "bind: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
 			ret = real.bind(fd, paddr, paddrlen);
-			fprintf(stdout, "bind: real.bind(tiaccoon): %d %d ret %d\n", socket, fd, ret);
+			// fprintf(stdout, "bind: real.bind(tiaccoon): %d %d ret %d\n", socket, fd, ret);
 			if (ret > ETRYRDMA) {
 				paddrlen = ret - ETRYRDMA;
 			// if (1) { // TODO: remove
-				addr_str = sockaddr2char(paddr);
-				addr_raw = byte2char(paddr->sa_data, paddrlen);
-				fprintf(stdout, "bind: try rdma: %d %d paddr %s raw_paddr %s paddrlen %d ret %d errno %d\n",
-					socket,
-					fd,
-					addr_str,
-					addr_raw,
-					paddrlen,
-					ret,
-					errno);
+				// addr_str = sockaddr2char(paddr);
+				// addr_raw = byte2char(paddr->sa_data, paddrlen);
+				// fprintf(stdout, "bind: try rdma: %d %d paddr %s raw_paddr %s paddrlen %d ret %d errno %d\n",
+				// 	socket,
+				// 	fd,
+				// 	addr_str,
+				// 	addr_raw,
+				// 	paddrlen,
+				// 	ret,
+				// 	errno);
 				// rsock = fd_open();
-				// fprintf(stdout, "bind: fd_open: %d\n", rsock);
+				// // fprintf(stdout, "bind: fd_open: %d\n", rsock);
 				// if (rsock < 0)
 				// 	return 0; // binded only real.socket
-				rsock = 0; // TODO: remove
+				// rsock = 0; // TODO: remove
 				domain = (paddrlen == sizeof(struct sockaddr_in6)) ? PF_INET6 : PF_INET;
-				fprintf(stdout, "bind: rsocket before: %d %d %d %d\n", rsock, domain ,SOCK_STREAM, 0);
+				// fprintf(stdout, "bind: rsocket before: %d %d %d %d\n", rsock, domain ,SOCK_STREAM, 0);
 				rfd = rsocket(domain, SOCK_STREAM, 0);
-				fprintf(stdout, "bind: rsocket after: %d %d %d %d rfd %d\n", rsock, domain ,SOCK_STREAM, 0, rfd);
+				// fprintf(stdout, "bind: rsocket after: %d %d %d %d rfd %d\n", rsock, domain ,SOCK_STREAM, 0, rfd);
 				if (rfd < 0)
 					return 0; // binded only real.socket
 				ret = copysockopts(rfd, fd, &rs, &real);
-				fprintf(stdout, "bind: copysockopts: %d %d %d %d ret %d\n", socket, rsock, fd, rfd, ret);
+				// fprintf(stdout, "bind: copysockopts: %d %d %d %d ret %d\n", socket, rsock, fd, rfd, ret);
 				if (ret) {
 					rclose(rfd);
 					return 0; // binded only real.socket
@@ -777,27 +778,27 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				fd_store(socket, rfd, fd_rsocket, fd_ready);
 				fdi = idm_at(&idm, socket);
 				if (!fdi) {
-					fprintf(stdout, "bind: idm_at failed: %d %d\n", socket, fd);
+					// fprintf(stdout, "bind: idm_at failed: %d %d\n", socket, fd);
 					return ret;
 				}
 				fdi->realfd = fd;
 				ret = rbind(rfd, paddr, paddrlen);
-				fprintf(stdout, "bind: rbind: %d %d ret %d errno %d\n", socket, fd, ret, errno);
-				addr_str = sockaddr2char(addr);
-				addr_raw = byte2char(addr->sa_data, addrlen);
-				fprintf(stdout, "bind: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
-					socket,
-					addr_str,
-					addr_raw,
-					addrlen);
+				// fprintf(stdout, "bind: rbind: %d %d ret %d errno %d\n", socket, fd, ret, errno);
+				// addr_str = sockaddr2char(addr);
+				// addr_raw = byte2char(addr->sa_data, addrlen);
+				// fprintf(stdout, "bind: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
+				// 	socket,
+				// 	addr_str,
+				// 	addr_raw,
+				// 	addrlen);
 				return ret;
 			} else {
 				return ret;
 			}
 		} else {
-			fprintf(stdout, "bind: not tiaccoon: %d %d\n", socket, fd);
+			// fprintf(stdout, "bind: not tiaccoon: %d %d\n", socket, fd);
 			ret = real.bind(fd, addr, addrlen);
-			fprintf(stdout, "bind: real.bind(not tiaccoon): %d %d ret %d\n", socket, fd, ret);
+			// fprintf(stdout, "bind: real.bind(not tiaccoon): %d %d ret %d\n", socket, fd, ret);
 			return ret;
 		}
 	}
@@ -805,31 +806,32 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 
 int listen(int socket, int backlog)
 {
-	int fd, ret, retreal;
+	int fd, ret;
+	// int retreal;
 	struct fd_info *fdi;
-	fprintf(stdout, "listen: listen: %d %d\n", socket, backlog);
+	// fprintf(stdout, "listen: listen: %d %d\n", socket, backlog);
 	if (fd_get(socket, &fd) == fd_rsocket) {
-		fprintf(stdout, "listen: fd_rsocket: %d %d\n", socket, fd);
+		// fprintf(stdout, "listen: fd_rsocket: %d %d\n", socket, fd);
 		ret = rlisten(fd, backlog);
 		fdi = idm_lookup(&idm, socket);
 		if (!fdi) {
-			fprintf(stdout, "listen: idm_lookup failed: %d %d\n", socket, fd);
+			// fprintf(stdout, "listen: idm_lookup failed: %d %d\n", socket, fd);
 			return ret;
 		}
-		fprintf(stdout, "listen: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
+		// fprintf(stdout, "listen: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
 		if (fdi->realfd != -1) { // tiaccoon
-			fprintf(stdout, "listen: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
-			retreal = real.listen(fdi->realfd, backlog);
-			fprintf(stdout, "listen: real.listen(tiaccoon): %d %d %d ret %d\n", socket, fd, fdi->realfd, retreal);
+			// fprintf(stdout, "listen: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
+			real.listen(fdi->realfd, backlog);
+			// fprintf(stdout, "listen: real.listen(tiaccoon): %d %d %d ret %d\n", socket, fd, fdi->realfd, retreal);
 			// TODO: accept queue
 			// return ret;
 		}
 	} else { //fd_normal
-		fprintf(stdout, "listen: not fd_rsocket: %d %d\n", socket, fd);\
+		// fprintf(stdout, "listen: not fd_rsocket: %d %d\n", socket, fd);
 		ret = real.listen(fd, backlog);
-		fprintf(stdout, "listen: real.listen: %d %d ret %d\n", socket, fd, ret);
+		// fprintf(stdout, "listen: real.listen: %d %d ret %d\n", socket, fd, ret);
 		if (!ret && fd_gets(socket) == fd_fork) {
-			fprintf(stdout, "listen: fork: %d %d\n", socket, fd);
+			// fprintf(stdout, "listen: fork: %d %d\n", socket, fd);
 			fd_store(socket, fd, fd_normal, fd_fork_listen);
 		}
 	}
@@ -842,42 +844,42 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 	struct fd_info *fdi;
 	struct sockaddr *srcvaddr;
 	socklen_t *srcvaddrlen;
-	fprintf(stdout, "accept: accept: %d\n", socket);
+	// fprintf(stdout, "accept: accept: %d\n", socket);
 
 	if (fd_get(socket, &fd) == fd_rsocket) {
-		fprintf(stdout, "accept: fd_rsocket: %d %d\n", socket, fd);
+		// fprintf(stdout, "accept: fd_rsocket: %d %d\n", socket, fd);
 		index = fd_open();
 		if (index < 0)
 			return index;
 
 		// TODO: accept queue
 		ret = raccept(fd, addr, addrlen);
-		fprintf(stdout, "accept: raccept: %d %d index %d ret %d\n", socket, fd, index, ret);
+		// fprintf(stdout, "accept: raccept: %d %d index %d ret %d\n", socket, fd, index, ret);
 		if (ret < 0) {
 			fd_close(index, &fd);
 			fdi = idm_lookup(&idm, socket);
 			if (!fdi) {
-				fprintf(stdout, "accept: idm_lookup failed: %d %d\n", socket, fd);
+				// fprintf(stdout, "accept: idm_lookup failed: %d %d\n", socket, fd);
 				return ret;
 			}
-			fprintf(stdout, "accept: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
+			// fprintf(stdout, "accept: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
 			if (fdi->realfd != -1) {
-				fprintf(stdout, "accept: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
+				// fprintf(stdout, "accept: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
 				ret = real.accept(fdi->realfd, addr, addrlen);
-				fprintf(stdout, "accept: real.accept: %d %d %d ret %d\n", socket, fd, fdi->realfd, ret);
+				// fprintf(stdout, "accept: real.accept: %d %d %d ret %d\n", socket, fd, fdi->realfd, ret);
 			}
 			return ret;
 		}
 		srcvaddr = malloc(sizeof(struct sockaddr));
 		srcvaddrlen = malloc(sizeof(socklen_t));
 		fd_getvaddr(socket, srcvaddr, srcvaddrlen);
-		fprintf(stdout, "accept: fd_getvaddr: %d %d %d\n", socket, fd, index);
+		// fprintf(stdout, "accept: fd_getvaddr: %d %d %d\n", socket, fd, index);
 
 		fd_store(index, ret, fd_rsocket, fd_ready);
 		fd_store_vaddr(index, srcvaddr, srcvaddrlen);
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
-		fprintf(stdout, "accept: fd_fork_listen: %d %d\n", socket, fd);
+		// fprintf(stdout, "accept: fd_fork_listen: %d %d\n", socket, fd);
 		index = fd_open();
 		if (index < 0)
 			return index;
@@ -1044,77 +1046,77 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	int fd, ret, ret2;
 	struct sockaddr *paddr;
 	socklen_t paddrlen;
-	char *addr_str, *addr_raw;
+	// char *addr_str, *addr_raw;
 
-	addr_str = sockaddr2char(addr);
-	addr_raw = byte2char(addr->sa_data, addrlen);
-	fprintf(stdout, "connect: connect: %d addr %s raw_addr %s addrlen %d\n",
-		socket,
-		addr_str,
-		addr_raw,
-		addrlen);
+	// addr_str = sockaddr2char(addr);
+	// addr_raw = byte2char(addr->sa_data, addrlen);
+	// fprintf(stdout, "connect: connect: %d addr %s raw_addr %s addrlen %d\n",
+	// 	socket,
+	// 	addr_str,
+	// 	addr_raw,
+	// 	addrlen);
 
 	if (fd_get(socket, &fd) == fd_normal) {
 		if (fd_gets(socket) == fd_tiaccoon) {
 			fd_store_vaddr(socket, addr, &addrlen);
-			fprintf(stdout, "connect: fd_store_vaddr: %d %d\n", socket, fd);
+			// fprintf(stdout, "connect: fd_store_vaddr: %d %d\n", socket, fd);
 			paddr = malloc(sizeof(struct sockaddr));
 			paddrlen = sizeof(struct sockaddr);
 			ret2 = fd_getvaddr(socket, paddr, &paddrlen); // Use physical addr
 			if (ret2) {
-				fprintf(stdout, "connect: fd_getvaddr failed: %d %d\n", socket, fd);
+				// fprintf(stdout, "connect: fd_getvaddr failed: %d %d\n", socket, fd);
 				return ret2;
 			}
-			fprintf(stdout, "connect: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
+			// fprintf(stdout, "connect: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
 			ret = real.connect(fd, paddr, paddrlen); // tiaccoon
-			fprintf(stdout, "connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
+			// fprintf(stdout, "connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
 			if (ret > ETRYRDMA) {
 				paddrlen = ret - ETRYRDMA;
 			// if (1) { // debug
-				addr_str = sockaddr2char(paddr);
-				addr_raw = byte2char(paddr->sa_data, paddrlen);
-				fprintf(stdout, "connect: try rdma: %d paddr %s raw_paddr %s paddrlen %d ret %d errno %d\n",
-					socket,
-					addr_str,
-					addr_raw,
-					paddrlen,
-					ret,
-					errno);
+				// addr_str = sockaddr2char(paddr);
+				// addr_raw = byte2char(paddr->sa_data, paddrlen);
+				// fprintf(stdout, "connect: try rdma: %d paddr %s raw_paddr %s paddrlen %d ret %d errno %d\n",
+				// 	socket,
+				// 	addr_str,
+				// 	addr_raw,
+				// 	paddrlen,
+				// 	ret,
+				// 	errno);
 				ret = transpose_socket(socket, fd_rsocket);
-				fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
+				// fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
 				if (ret < 0)
 					return ret;
 
 				rclose(fd);
 				fd = ret;
 				ret = rconnect(fd, paddr, paddrlen);
-				fprintf(stdout, "connect: rconnect(tiaccoon): %d\n", ret);
+				// fprintf(stdout, "connect: rconnect(tiaccoon): %d\n", ret);
 				if (!ret || errno == EINPROGRESS) {
-					addr_str = sockaddr2char(addr);
-					addr_raw = byte2char(addr->sa_data, addrlen);
-					fprintf(stdout, "connect: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
-						socket,
-						addr_str,
-						addr_raw,
-						addrlen);
+					// addr_str = sockaddr2char(addr);
+					// addr_raw = byte2char(addr->sa_data, addrlen);
+					// fprintf(stdout, "connect: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
+					// 	socket,
+					// 	addr_str,
+					// 	addr_raw,
+					// 	addrlen);
 					return ret;
 				}
 			}
 			fd_store(socket, fd, fd_normal, fd_ready);
-			fprintf(stdout, "connect: not rdma\n");
+			// fprintf(stdout, "connect: not rdma\n");
 			return ret;
 		} else if (fd_gets(socket) == fd_fork) {
 			fd_store(socket, fd, fd_normal, fd_fork_active);
 		}
 	} else { // fd_rsocket
-		fprintf(stdout, "connect: fd_rsocket\n");
+		// fprintf(stdout, "connect: fd_rsocket\n");
 		ret = rconnect(fd, addr, addrlen);
-		fprintf(stdout, "connect: rconnect: %d\n", ret);
+		// fprintf(stdout, "connect: rconnect: %d\n", ret);
 		if (!ret || errno == EINPROGRESS)
 			return ret;
 
 		ret = transpose_socket(socket, fd_normal);
-		fprintf(stdout, "connect: transpose_socket to normal: %d\n", ret);
+		// fprintf(stdout, "connect: transpose_socket to normal: %d\n", ret);
 		if (ret < 0)
 			return ret;
 
@@ -1123,7 +1125,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	}
 
 	ret = real.connect(fd, addr, addrlen);
-	fprintf(stdout, "connect: real.connect: %d %d errno %d\n", fd, ret, errno);
+	// fprintf(stdout, "connect: real.connect: %d %d errno %d\n", fd, ret, errno);
 	return ret;
 }
 
@@ -1344,7 +1346,7 @@ int close(int socket)
 {
 	struct fd_info *fdi;
 	int ret;
-	fprintf(stdout, "close: close: %d\n", socket);
+	// fprintf(stdout, "close: close: %d\n", socket);
 
 	init_preload();
 	fdi = idm_lookup(&idm, socket);
@@ -1358,12 +1360,12 @@ int close(int socket)
 	}
 
 	if (fdi->realfd != -1) {
-		fprintf(stdout, "close: real.close: %d\n", fdi->realfd);
+		// fprintf(stdout, "close: real.close: %d\n", fdi->realfd);
 		ret = real.close(fdi->realfd);
 		if (ret)
 			return ret;
 	}
-	fprintf(stdout, "close: close: socket %d fdi->fd %d\n", socket, fdi->fd);
+	// fprintf(stdout, "close: close: socket %d fdi->fd %d\n", socket, fdi->fd);
 
 	if (atomic_fetch_sub(&fdi->refcnt, 1) != 1)
 		return 0;
@@ -1392,17 +1394,17 @@ int getpeername(int socket, struct sockaddr *addr, socklen_t *addrlen)
 int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd;
-	char *addr_str, *addr_raw;
+	// char *addr_str, *addr_raw;
 	init_preload();
-	addr_str = sockaddr2char(addr);
-	addr_raw = byte2char(addr->sa_data, *addrlen);
-	fprintf(stdout, "getsockname: getsockname: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, *addrlen);
+	// addr_str = sockaddr2char(addr);
+	// addr_raw = byte2char(addr->sa_data, *addrlen);
+	// fprintf(stdout, "getsockname: getsockname: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, *addrlen);
 
 	if (!fd_getvaddr(socket, addr, addrlen)) {
 		return 0;
 	}
 
-	fprintf(stdout, "getsockname: normal getsockname: %d\n", socket);
+	// fprintf(stdout, "getsockname: normal getsockname: %d\n", socket);
 
 	return (fd_get(socket, &fd) == fd_rsocket) ?
 		rgetsockname(fd, addr, addrlen) :

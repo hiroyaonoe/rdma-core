@@ -1239,31 +1239,31 @@ int rbind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	struct rsocket *rs;
 	int ret;
-	fprintf(stdout, "rbind: rbind: %d\n", socket);
+	// fprintf(stdout, "rbind: rbind: %d\n", socket);
 
 	rs = idm_lookup(&idm, socket);
 	if (!rs) {
-		fprintf(stdout, "rbind: !rs: %d\n", socket);
+		// fprintf(stdout, "rbind: !rs: %d\n", socket);
 		return ERR(EBADF);
 	}
 	if (rs->type == SOCK_STREAM) {
-		fprintf(stdout, "rbind: SOCK_STREAM: %d\n", socket);
+		// fprintf(stdout, "rbind: SOCK_STREAM: %d\n", socket);
 		ret = rdma_bind_addr(rs->cm_id, (struct sockaddr *) addr);
-		fprintf(stdout, "rbind: rdma_bind_addr: %d ret %d errno %d\n", socket, ret, errno);
+		// fprintf(stdout, "rbind: rdma_bind_addr: %d ret %d errno %d\n", socket, ret, errno);
 		if (!ret)
 			rs->state = rs_bound;
 	} else {
-		fprintf(stdout, "rbind: not SOCK_STREAM: %d\n", socket);
+		// fprintf(stdout, "rbind: not SOCK_STREAM: %d\n", socket);
 		if (rs->state == rs_init) {
 			ret = ds_init_ep(rs);
-			fprintf(stdout, "rbind: ds_init_ep: %d ret %d errno %d\n", socket, ret, errno);
+			// fprintf(stdout, "rbind: ds_init_ep: %d ret %d errno %d\n", socket, ret, errno);
 			if (ret)
 				return ret;
 		}
 		ret = bind(rs->udp_sock, addr, addrlen);
-		fprintf(stdout, "rbind: real.bind: %d ret %d errno %d\n", socket, ret, errno);
+		// fprintf(stdout, "rbind: real.bind: %d ret %d errno %d\n", socket, ret, errno);
 	}
-	fprintf(stdout, "rbind: rbind ret: %d ret %d errno %d\n", socket, ret, errno);
+	// fprintf(stdout, "rbind: rbind ret: %d ret %d errno %d\n", socket, ret, errno);
 	return ret;
 }
 
@@ -1363,7 +1363,7 @@ int raccept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 	struct rsocket *rs, *new_rs;
 	int ret;
 
-	fprintf(stdout, "raccept: raccept: %d", socket);
+	// fprintf(stdout, "raccept: raccept: %d", socket);
 
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
@@ -1392,26 +1392,26 @@ static int rs_do_connect(struct rsocket *rs)
 	struct rs_conn_data *creq, *cresp;
 	int to, ret;
 
-	fprintf(stdout, "rs_do_connect: rs_do_connect\n");
+	// fprintf(stdout, "rs_do_connect: rs_do_connect\n");
 	fastlock_acquire(&rs->slock);
 	switch (rs->state) {
 	case rs_init:
 	case rs_bound:
 resolve_addr:
-		fprintf(stdout, "rs_do_connect: rs_init rs_bound\n");
+		// fprintf(stdout, "rs_do_connect: rs_init rs_bound\n");
 		to = 1000 << rs->retries++;
 		ret = rdma_resolve_addr(rs->cm_id, NULL,
 					&rs->cm_id->route.addr.dst_addr, to);
-		fprintf(stdout, "rs_do_connect: rdma_resolve_addr: %d\n", ret);
+		// fprintf(stdout, "rs_do_connect: rdma_resolve_addr: %d\n", ret);
 		if (!ret)
 			goto resolve_route;
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 			rs->state = rs_resolving_addr;
 		break;
 	case rs_resolving_addr:
-		fprintf(stdout, "rs_do_connect: rs_resolving_addr\n");
+		// fprintf(stdout, "rs_do_connect: rs_resolving_addr\n");
 		ret = ucma_complete(rs->cm_id);
-		fprintf(stdout, "rs_do_connect: ucma_complete 1: %d\n", ret);
+		// fprintf(stdout, "rs_do_connect: ucma_complete 1: %d\n", ret);
 		if (ret) {
 			if (errno == ETIMEDOUT && rs->retries <= RS_CONN_RETRIES)
 				goto resolve_addr;
@@ -1422,11 +1422,11 @@ resolve_addr:
 resolve_route:
 		to = 1000 << rs->retries++;
 		if (rs->optval) {
-			fprintf(stdout, "rs_do_connect: rs->optval true\n");
+			// fprintf(stdout, "rs_do_connect: rs->optval true\n");
 			ret = rdma_set_option(rs->cm_id,  RDMA_OPTION_IB,
 					      RDMA_OPTION_IB_PATH, rs->optval,
 					      rs->optlen);
-			fprintf(stdout, "rs_do_connect: rdma_set_option: %d\n", ret);
+			// fprintf(stdout, "rs_do_connect: rdma_set_option: %d\n", ret);
 			free(rs->optval);
 			rs->optval = NULL;
 			if (!ret) {
@@ -1434,9 +1434,9 @@ resolve_route:
 				goto resolving_route;
 			}
 		} else {
-			fprintf(stdout, "rs_do_connect: rs->optval false\n");
+			// fprintf(stdout, "rs_do_connect: rs->optval false\n");
 			ret = rdma_resolve_route(rs->cm_id, to);
-			fprintf(stdout, "rs_do_connect: rdma_resolve_route: %d\n", ret);
+			// fprintf(stdout, "rs_do_connect: rdma_resolve_route: %d\n", ret);
 			if (!ret)
 				goto do_connect;
 		}
@@ -1446,16 +1446,16 @@ resolve_route:
 	case rs_resolving_route:
 resolving_route:
 		ret = ucma_complete(rs->cm_id);
-		fprintf(stdout, "rs_do_connect: ucma_complete 2: %d\n", ret);
+		// fprintf(stdout, "rs_do_connect: ucma_complete 2: %d\n", ret);
 		if (ret) {
 			if (errno == ETIMEDOUT && rs->retries <= RS_CONN_RETRIES)
 				goto resolve_route;
 			break;
 		}
 do_connect:
-		fprintf(stdout, "rs_do_connect: do_connect\n");
+		// fprintf(stdout, "rs_do_connect: do_connect\n");
 		ret = rs_create_ep(rs);
-		fprintf(stdout, "rs_do_connect: rs_create_ep: %d\n", ret);
+		// fprintf(stdout, "rs_do_connect: rs_create_ep: %d\n", ret);
 		if (ret)
 			break;
 
@@ -1472,9 +1472,9 @@ do_connect:
 			param.initiator_depth = 1;
 		rs->retries = 0;
 
-		fprintf(stdout, "rs_do_connect: rdma_connect before\n");
+		// fprintf(stdout, "rs_do_connect: rdma_connect before\n");
 		ret = rdma_connect(rs->cm_id, &param);
-		fprintf(stdout, "rs_do_connect: rdma_connect: %d\n", ret);
+		// fprintf(stdout, "rs_do_connect: rdma_connect: %d\n", ret);
 		if (!ret)
 			goto connected;
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -1744,15 +1744,15 @@ int rconnect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	struct rsocket *rs;
 	int ret, save_errno;
 
-	fprintf(stdout, "rconnect: rconnect: %d\n", socket);
+	// fprintf(stdout, "rconnect: rconnect: %d\n", socket);
 	rs = idm_lookup(&idm, socket);
-	fprintf(stdout, "rconnect: idm_lookup: %d\n", socket);
+	// fprintf(stdout, "rconnect: idm_lookup: %d\n", socket);
 	if (!rs)
 		return ERR(EBADF);
 	if (rs->type == SOCK_STREAM) {
 		memcpy(&rs->cm_id->route.addr.dst_addr, addr, addrlen);
 		ret = rs_do_connect(rs);
-		fprintf(stdout, "rconnect: rs_do_connect: %d\n", ret);
+		// fprintf(stdout, "rconnect: rs_do_connect: %d\n", ret);
 		if (ret == -1 && errno == EINPROGRESS) {
 			save_errno = errno;
 			/* The app can still drive the CM state on failure */
@@ -3081,7 +3081,7 @@ static int rs_pollinit(void)
 		goto unlock;
 
 	pollsignal = eventfd(0, EFD_NONBLOCK | EFD_SEMAPHORE);
-	fprintf(stdout, "rs_pollinit: rs_pollinit: %d\n", pollsignal);
+	// fprintf(stdout, "rs_pollinit: rs_pollinit: %d\n", pollsignal);
 	if (pollsignal < 0)
 		ret = -errno;
 
@@ -3124,7 +3124,7 @@ static void rs_poll_exit(void)
 		 */
 		save_errno = errno;
 		ret = read(pollsignal, &c, sizeof(c));
-		fprintf(stdout, "rs_poll_exit: read: %d %ld\n", pollsignal, ret);
+		// fprintf(stdout, "rs_poll_exit: read: %d %ld\n", pollsignal, ret);
 		if (ret != sizeof(c))
 			errno = save_errno;
 		suspendpoll = 0;
@@ -3160,7 +3160,7 @@ static void rs_poll_stop(void)
 	pthread_mutex_lock(&mut);
 	if (!--pollcnt) {
 		ret = read(pollsignal, &c, sizeof(c));
-		fprintf(stdout, "rs_poll_stop: read: %d %ld\n", pollsignal, ret);
+		// fprintf(stdout, "rs_poll_stop: read: %d %ld\n", pollsignal, ret);
 		suspendpoll = 0;
 	} else if (!suspendpoll) {
 		suspendpoll = 1;
@@ -3261,7 +3261,7 @@ check_cq:
 		fds.events = events;
 		fds.revents = 0;
 		poll(&fds, 1, 0);
-		fprintf(stdout, "rs_poll_rs: poll: %d\n", fds.fd);
+		// fprintf(stdout, "rs_poll_rs: poll: %d\n", fds.fd);
 		return fds.revents;
 	}
 
@@ -3292,20 +3292,20 @@ static int rs_poll_check(struct pollfd *fds, nfds_t nfds)
 	struct rsocket *rs;
 	int i, cnt = 0;
 
-	fprintf(stdout, "rs_poll_check: rs_poll_check: %ld\n", nfds);
+	// fprintf(stdout, "rs_poll_check: rs_poll_check: %ld\n", nfds);
 	for (i = 0; i < nfds; i++) {
 		rs = idm_lookup(&idm, fds[i].fd);
-		fprintf(stdout, "rs_poll_check: idm_lookup: %d\n", i);
+		// fprintf(stdout, "rs_poll_check: idm_lookup: %d\n", i);
 		if (rs) {
-			fprintf(stdout, "rs_poll_check: rs true: %d\n", i);
+			// fprintf(stdout, "rs_poll_check: rs true: %d\n", i);
 			fds[i].revents = rs_poll_rs(rs, fds[i].events, 1, rs_poll_all);
 		} else {
-			fprintf(stdout, "rs_poll_check: rs false: %d\n", i);
+			// fprintf(stdout, "rs_poll_check: rs false: %d\n", i);
 			poll(&fds[i], 1, 0);
 		}
 
 		if (fds[i].revents) {
-			fprintf(stdout, "rs_poll_check: fds[%d].revents\n", i);
+			// fprintf(stdout, "rs_poll_check: fds[%d].revents\n", i);
 			cnt++;
 		}
 	}
@@ -3381,10 +3381,10 @@ int rpoll(struct pollfd *fds, nfds_t nfds, int timeout)
 	uint32_t poll_time;
 	int pollsleep, ret;
 
-	fprintf(stdout, "rpoll: rpoll: %ld\n", nfds);
+	// fprintf(stdout, "rpoll: rpoll: %ld\n", nfds);
 	do {
 		ret = rs_poll_check(fds, nfds);
-		fprintf(stdout, "rpoll: rs_poll_check: %d\n", ret);
+		// fprintf(stdout, "rpoll: rs_poll_check: %d\n", ret);
 		if (ret || !timeout)
 			return ret;
 
@@ -3396,13 +3396,13 @@ int rpoll(struct pollfd *fds, nfds_t nfds, int timeout)
 
 	rfds = rs_fds_alloc(nfds);
 	if (!rfds) {
-		fprintf(stdout, "rpoll: rs_fds_alloc\n");
+		// fprintf(stdout, "rpoll: rs_fds_alloc\n");
 		return ERR(ENOMEM);
 	}
 
 	do {
 		ret = rs_poll_arm(rfds, fds, nfds);
-		fprintf(stdout, "rpoll: rs_poll_arm: %d\n", ret);
+		// fprintf(stdout, "rpoll: rs_poll_arm: %d\n", ret);
 		if (ret)
 			break;
 
@@ -3412,7 +3412,7 @@ int rpoll(struct pollfd *fds, nfds_t nfds, int timeout)
 		if (timeout >= 0) {
 			timeout -= (int) ((rs_time_us() - start_time) / 1000);
 			if (timeout <= 0) {
-				fprintf(stdout, "rpoll: timeout: %d\n", timeout);
+				// fprintf(stdout, "rpoll: timeout: %d\n", timeout);
 				return 0;
 			}
 			pollsleep = min(timeout, wake_up_interval);
@@ -3420,17 +3420,17 @@ int rpoll(struct pollfd *fds, nfds_t nfds, int timeout)
 			pollsleep = wake_up_interval;
 		}
 
-		fprintf(stdout, "rpoll: poll before: %ld\n", nfds);
+		// fprintf(stdout, "rpoll: poll before: %ld\n", nfds);
 		ret = poll(rfds, nfds + 1, pollsleep);
-		fprintf(stdout, "rpoll: poll after: %ld %d\n", nfds, ret);
+		// fprintf(stdout, "rpoll: poll after: %ld %d\n", nfds, ret);
 		if (ret < 0) {
 			rs_poll_exit();
-			fprintf(stdout, "rpoll: rs_poll_exit: %ld %d\n", nfds, ret);
+			// fprintf(stdout, "rpoll: rs_poll_exit: %ld %d\n", nfds, ret);
 			break;
 		}
 
 		ret = rs_poll_events(rfds, fds, nfds);
-		fprintf(stdout, "rpoll: rs_poll_events: %ld %d\n", nfds, ret);
+		// fprintf(stdout, "rpoll: rs_poll_events: %ld %d\n", nfds, ret);
 		rs_poll_stop();
 	} while (!ret);
 
@@ -3605,7 +3605,7 @@ static void ds_shutdown(struct rsocket *rs)
 int rclose(int socket)
 {
 	struct rsocket *rs;
-	fprintf(stdout, "rclose: rclose: %d\n", socket);
+	// fprintf(stdout, "rclose: rclose: %d\n", socket);
 
 	rs = idm_lookup(&idm, socket);
 	if (!rs)
