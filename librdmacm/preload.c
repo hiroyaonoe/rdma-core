@@ -127,6 +127,8 @@ struct fd_info {
 	int realfd;
 	struct sockaddr *vlocaladdr;
 	socklen_t *vlocaladdrlen;
+	struct sockaddr *vremoteaddr;
+	socklen_t *vremoteaddrlen;
 	_Atomic(int) refcnt;
 };
 
@@ -390,6 +392,30 @@ static void fd_store_vlocaladdr(int index, const struct sockaddr *addr, socklen_
 	// fprintf(stdout, "fd_store_vlocaladdr: fd_store_vlocaladdr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *fdi->vlocaladdrlen);
 }
 
+static void fd_store_vremoteaddr(int index, const struct sockaddr *addr, socklen_t *addrlen)
+{
+	struct fd_info *fdi;
+	// char *addr_str, *addr_raw;
+
+	// fprintf(stdout, "fd_store_vremoteaddr: fd_store_vremoteaddr :%d\n", index);
+
+	fdi = idm_at(&idm, index);
+
+	if (!fdi->vremoteaddr) {
+		fdi->vremoteaddr = malloc(sizeof(struct sockaddr));
+	}
+	if (!fdi->vremoteaddrlen) {
+		fdi->vremoteaddrlen = malloc(sizeof(socklen_t));
+	}
+
+	memcpy(fdi->vremoteaddr, addr, *addrlen);
+	memcpy(fdi->vremoteaddrlen, addrlen, sizeof(socklen_t));
+
+	// addr_str = sockaddr2char(fdi->vremoteaddr);
+	// addr_raw = byte2char(fdi->vremoteaddr->sa_data, *fdi->vremoteaddrlen);
+	// fprintf(stdout, "fd_store_vremoteaddr: fd_store_vremoteaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *fdi->vremoteaddrlen);
+}
+
 static inline enum fd_type fd_get(int index, int *fd)
 {
 	struct fd_info *fdi;
@@ -452,6 +478,32 @@ static inline int fd_getvlocaladdr(int index, struct sockaddr *addr, socklen_t *
 		return 0;
 	}
 	// fprintf(stdout, "fd_getvlocaladdr: not found vlocaladdr: %d\n", index);
+	return 1;
+}
+
+static inline int fd_getvremoteaddr(int index, struct sockaddr *addr, socklen_t *addrlen)
+{
+	struct fd_info *fdi;
+	// char *addr_str, *addr_raw;
+	// fprintf(stdout, "fd_getvremoteaddr: fd_getvremoteaddr: %d\n", index);
+
+	fdi = idm_lookup(&idm, index);
+
+	if (!fdi) {
+		// fprintf(stdout, "fd_getvremoteaddr: not found fdi: %d\n", index);
+		return 1;
+	}
+	// fprintf(stdout, "fd_getvremoteaddr: found fdi: %d\n", index);
+
+	if (fdi->vremoteaddr && fdi->vremoteaddrlen) {
+		memcpy(addr, fdi->vremoteaddr, *fdi->vremoteaddrlen);
+		memcpy(addrlen, fdi->vremoteaddrlen, sizeof(socklen_t));
+		// addr_str = sockaddr2char(addr);
+		// addr_raw = byte2char(addr->sa_data, *addrlen);
+		// fprintf(stdout, "fd_getvremoteaddr: fd_getvremoteaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
+		return 0;
+	}
+	// fprintf(stdout, "fd_getvremoteaddr: not found vremoteaddr: %d\n", index);
 	return 1;
 }
 
@@ -877,6 +929,7 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 
 		fd_store(index, ret, fd_rsocket, fd_ready);
 		fd_store_vlocaladdr(index, srcvlocaladdr, srcvlocaladdrlen);
+		// No need to store vremoteaddr because rgetpeername or real.getpeername works
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
 		// fprintf(stdout, "accept: fd_fork_listen: %d %d\n", socket, fd);
@@ -1058,16 +1111,16 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 
 	if (fd_get(socket, &fd) == fd_normal) {
 		if (fd_gets(socket) == fd_tiaccoon) {
-			fd_store_vlocaladdr(socket, addr, &addrlen);
-			// fprintf(stdout, "connect: fd_store_vlocaladdr: %d %d\n", socket, fd);
+			fd_store_vremoteaddr(socket, addr, &addrlen);
+			// fprintf(stdout, "connect: fd_store_vremoteaddr: %d %d\n", socket, fd);
 			paddr = malloc(sizeof(struct sockaddr));
 			paddrlen = sizeof(struct sockaddr);
-			ret2 = fd_getvlocaladdr(socket, paddr, &paddrlen); // Use physical addr
+			ret2 = fd_getvremoteaddr(socket, paddr, &paddrlen); // Use physical addr
 			if (ret2) {
-				// fprintf(stdout, "connect: fd_getvlocaladdr failed: %d %d\n", socket, fd);
+				// fprintf(stdout, "connect: fd_getvremoteaddr failed: %d %d\n", socket, fd);
 				return ret2;
 			}
-			// fprintf(stdout, "connect: fd_getvlocaladdr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
+			// fprintf(stdout, "connect: fd_getvremoteaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
 			ret = real.connect(fd, paddr, paddrlen); // tiaccoon
 			// fprintf(stdout, "connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
 			if (ret > ETRYRDMA) {
@@ -1094,7 +1147,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				if (!ret || errno == EINPROGRESS) {
 					// addr_str = sockaddr2char(addr);
 					// addr_raw = byte2char(addr->sa_data, addrlen);
-					// fprintf(stdout, "connect: ret addr is vlocaladdr: %d addr %s raw_addr %s addrlen %d\n",
+					// fprintf(stdout, "connect: ret addr is vremoteaddr: %d addr %s raw_addr %s addrlen %d\n",
 					// 	socket,
 					// 	addr_str,
 					// 	addr_raw,
@@ -1379,6 +1432,12 @@ int close(int socket)
 	if (fdi->vlocaladdrlen) {
 		free(fdi->vlocaladdrlen);
 	}
+	if (fdi->vremoteaddr) {
+		free(fdi->vremoteaddr);
+	}
+	if (fdi->vremoteaddrlen) {
+		free(fdi->vremoteaddrlen);
+	}
 	free(fdi);
 	return ret;
 }
@@ -1386,6 +1445,17 @@ int close(int socket)
 int getpeername(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd;
+	// char *addr_str, *addr_raw;
+	init_preload();
+	// addr_str = sockaddr2char(addr);
+	// addr_raw = byte2char(addr->sa_data, *addrlen);
+	// fprintf(stdout, "getpeername: getpeername: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, *addrlen);
+
+	if (!fd_getvremoteaddr(socket, addr, addrlen)) {
+		return 0;
+	}
+
+	// fprintf(stdout, "getpeername: normal getpeername: %d\n", socket);
 	return (fd_get(socket, &fd) == fd_rsocket) ?
 		rgetpeername(fd, addr, addrlen) :
 		real.getpeername(fd, addr, addrlen);
