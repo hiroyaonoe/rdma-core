@@ -125,8 +125,8 @@ struct fd_info {
 	int fd;
 	int dupfd;
 	int realfd;
-	struct sockaddr *vaddr;
-	socklen_t *vaddrlen;
+	struct sockaddr *vlocaladdr;
+	socklen_t *vlocaladdrlen;
 	_Atomic(int) refcnt;
 };
 
@@ -366,28 +366,28 @@ static void fd_store(int index, int fd, enum fd_type type, enum fd_fork_state st
 	fdi->state = state;
 }
 
-static void fd_store_vaddr(int index, const struct sockaddr *addr, socklen_t *addrlen)
+static void fd_store_vlocaladdr(int index, const struct sockaddr *addr, socklen_t *addrlen)
 {
 	struct fd_info *fdi;
 	// char *addr_str, *addr_raw;
 
-	// fprintf(stdout, "fd_store_vaddr: fd_store_vaddr :%d\n", index);
+	// fprintf(stdout, "fd_store_vlocaladdr: fd_store_vlocaladdr :%d\n", index);
 
 	fdi = idm_at(&idm, index);
 
-	if (!fdi->vaddr) {
-		fdi->vaddr = malloc(sizeof(struct sockaddr));
+	if (!fdi->vlocaladdr) {
+		fdi->vlocaladdr = malloc(sizeof(struct sockaddr));
 	}
-	if (!fdi->vaddrlen) {
-		fdi->vaddrlen = malloc(sizeof(socklen_t));
+	if (!fdi->vlocaladdrlen) {
+		fdi->vlocaladdrlen = malloc(sizeof(socklen_t));
 	}
 
-	memcpy(fdi->vaddr, addr, *addrlen);
-	memcpy(fdi->vaddrlen, addrlen, sizeof(socklen_t));
+	memcpy(fdi->vlocaladdr, addr, *addrlen);
+	memcpy(fdi->vlocaladdrlen, addrlen, sizeof(socklen_t));
 
-	// addr_str = sockaddr2char(fdi->vaddr);
-	// addr_raw = byte2char(fdi->vaddr->sa_data, *fdi->vaddrlen);
-	// fprintf(stdout, "fd_store_vaddr: fd_store_vaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *fdi->vaddrlen);
+	// addr_str = sockaddr2char(fdi->vlocaladdr);
+	// addr_raw = byte2char(fdi->vlocaladdr->sa_data, *fdi->vlocaladdrlen);
+	// fprintf(stdout, "fd_store_vlocaladdr: fd_store_vlocaladdr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *fdi->vlocaladdrlen);
 }
 
 static inline enum fd_type fd_get(int index, int *fd)
@@ -429,29 +429,29 @@ static inline enum fd_type fd_gett(int index)
 	return fdi ? fdi->type : fd_normal;
 }
 
-static inline int fd_getvaddr(int index, struct sockaddr *addr, socklen_t *addrlen)
+static inline int fd_getvlocaladdr(int index, struct sockaddr *addr, socklen_t *addrlen)
 {
 	struct fd_info *fdi;
 	// char *addr_str, *addr_raw;
-	// fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d\n", index);
+	// fprintf(stdout, "fd_getvlocaladdr: fd_getvlocaladdr: %d\n", index);
 
 	fdi = idm_lookup(&idm, index);
 
 	if (!fdi) {
-		// fprintf(stdout, "fd_getvaddr: not found fdi: %d\n", index);
+		// fprintf(stdout, "fd_getvlocaladdr: not found fdi: %d\n", index);
 		return 1;
 	}
-	// fprintf(stdout, "fd_getvaddr: found fdi: %d\n", index);
+	// fprintf(stdout, "fd_getvlocaladdr: found fdi: %d\n", index);
 
-	if (fdi->vaddr && fdi->vaddrlen) {
-		memcpy(addr, fdi->vaddr, *fdi->vaddrlen);
-		memcpy(addrlen, fdi->vaddrlen, sizeof(socklen_t));
+	if (fdi->vlocaladdr && fdi->vlocaladdrlen) {
+		memcpy(addr, fdi->vlocaladdr, *fdi->vlocaladdrlen);
+		memcpy(addrlen, fdi->vlocaladdrlen, sizeof(socklen_t));
 		// addr_str = sockaddr2char(addr);
 		// addr_raw = byte2char(addr->sa_data, *addrlen);
-		// fprintf(stdout, "fd_getvaddr: fd_getvaddr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
+		// fprintf(stdout, "fd_getvlocaladdr: fd_getvlocaladdr: %d addr %s raw_addr %s addrlen %d\n", index, addr_str, addr_raw, *addrlen);
 		return 0;
 	}
-	// fprintf(stdout, "fd_getvaddr: not found vaddr: %d\n", index);
+	// fprintf(stdout, "fd_getvlocaladdr: not found vlocaladdr: %d\n", index);
 	return 1;
 }
 
@@ -733,16 +733,16 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	} else {// fd_normal
 		if (fd_gets(socket) == fd_tiaccoon) {
 			// fprintf(stdout, "bind: tiaccoon: %d %d\n", socket, fd);
-			fd_store_vaddr(socket, addr, &addrlen);
-			// fprintf(stdout, "bind: fd_store_vaddr 1: %d %d\n", socket, fd);
+			fd_store_vlocaladdr(socket, addr, &addrlen);
+			// fprintf(stdout, "bind: fd_store_vlocaladdr 1: %d %d\n", socket, fd);
 			paddr = malloc(sizeof(struct sockaddr));
 			paddrlen = sizeof(struct sockaddr);
-			ret2 = fd_getvaddr(socket, paddr, &paddrlen); // Use physical addr
+			ret2 = fd_getvlocaladdr(socket, paddr, &paddrlen); // Use physical addr
 			if (ret2) {
-				// fprintf(stdout, "bind: fd_getvaddr failed: %d %d\n", socket, fd);
+				// fprintf(stdout, "bind: fd_getvlocaladdr failed: %d %d\n", socket, fd);
 				return ret2;
 			}
-			// fprintf(stdout, "bind: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
+			// fprintf(stdout, "bind: fd_getvlocaladdr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
 			ret = real.bind(fd, paddr, paddrlen);
 			// fprintf(stdout, "bind: real.bind(tiaccoon): %d %d ret %d\n", socket, fd, ret);
 			if (ret > ETRYRDMA) {
@@ -786,7 +786,7 @@ int bind(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				// fprintf(stdout, "bind: rbind: %d %d ret %d errno %d\n", socket, fd, ret, errno);
 				// addr_str = sockaddr2char(addr);
 				// addr_raw = byte2char(addr->sa_data, addrlen);
-				// fprintf(stdout, "bind: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
+				// fprintf(stdout, "bind: ret addr is vlocaladdr: %d addr %s raw_addr %s addrlen %d\n",
 				// 	socket,
 				// 	addr_str,
 				// 	addr_raw,
@@ -842,8 +842,8 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int fd, index, ret;
 	struct fd_info *fdi;
-	struct sockaddr *srcvaddr;
-	socklen_t *srcvaddrlen;
+	struct sockaddr *srcvlocaladdr;
+	socklen_t *srcvlocaladdrlen;
 	// fprintf(stdout, "accept: accept: %d\n", socket);
 
 	if (fd_get(socket, &fd) == fd_rsocket) {
@@ -870,13 +870,13 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 			}
 			return ret;
 		}
-		srcvaddr = malloc(sizeof(struct sockaddr));
-		srcvaddrlen = malloc(sizeof(socklen_t));
-		fd_getvaddr(socket, srcvaddr, srcvaddrlen);
-		// fprintf(stdout, "accept: fd_getvaddr: %d %d %d\n", socket, fd, index);
+		srcvlocaladdr = malloc(sizeof(struct sockaddr));
+		srcvlocaladdrlen = malloc(sizeof(socklen_t));
+		fd_getvlocaladdr(socket, srcvlocaladdr, srcvlocaladdrlen);
+		// fprintf(stdout, "accept: fd_getvlocaladdr: %d %d %d\n", socket, fd, index);
 
 		fd_store(index, ret, fd_rsocket, fd_ready);
-		fd_store_vaddr(index, srcvaddr, srcvaddrlen);
+		fd_store_vlocaladdr(index, srcvlocaladdr, srcvlocaladdrlen);
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
 		// fprintf(stdout, "accept: fd_fork_listen: %d %d\n", socket, fd);
@@ -1058,16 +1058,16 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 
 	if (fd_get(socket, &fd) == fd_normal) {
 		if (fd_gets(socket) == fd_tiaccoon) {
-			fd_store_vaddr(socket, addr, &addrlen);
-			// fprintf(stdout, "connect: fd_store_vaddr: %d %d\n", socket, fd);
+			fd_store_vlocaladdr(socket, addr, &addrlen);
+			// fprintf(stdout, "connect: fd_store_vlocaladdr: %d %d\n", socket, fd);
 			paddr = malloc(sizeof(struct sockaddr));
 			paddrlen = sizeof(struct sockaddr);
-			ret2 = fd_getvaddr(socket, paddr, &paddrlen); // Use physical addr
+			ret2 = fd_getvlocaladdr(socket, paddr, &paddrlen); // Use physical addr
 			if (ret2) {
-				// fprintf(stdout, "connect: fd_getvaddr failed: %d %d\n", socket, fd);
+				// fprintf(stdout, "connect: fd_getvlocaladdr failed: %d %d\n", socket, fd);
 				return ret2;
 			}
-			// fprintf(stdout, "connect: fd_getvaddr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
+			// fprintf(stdout, "connect: fd_getvlocaladdr physical addr: %d %d %d %d\n", socket, fd, ret2, paddrlen);
 			ret = real.connect(fd, paddr, paddrlen); // tiaccoon
 			// fprintf(stdout, "connect: tiaccoon: fd %d ret %d errno %d\n", fd, ret, errno);
 			if (ret > ETRYRDMA) {
@@ -1094,7 +1094,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				if (!ret || errno == EINPROGRESS) {
 					// addr_str = sockaddr2char(addr);
 					// addr_raw = byte2char(addr->sa_data, addrlen);
-					// fprintf(stdout, "connect: ret addr is vaddr: %d addr %s raw_addr %s addrlen %d\n",
+					// fprintf(stdout, "connect: ret addr is vlocaladdr: %d addr %s raw_addr %s addrlen %d\n",
 					// 	socket,
 					// 	addr_str,
 					// 	addr_raw,
@@ -1373,11 +1373,11 @@ int close(int socket)
 	idm_clear(&idm, socket);
 	real.close(socket);
 	ret = (fdi->type == fd_rsocket) ? rclose(fdi->fd) : real.close(fdi->fd);
-	if (fdi->vaddr) {
-		free(fdi->vaddr);
+	if (fdi->vlocaladdr) {
+		free(fdi->vlocaladdr);
 	}
-	if (fdi->vaddrlen) {
-		free(fdi->vaddrlen);
+	if (fdi->vlocaladdrlen) {
+		free(fdi->vlocaladdrlen);
 	}
 	free(fdi);
 	return ret;
@@ -1400,7 +1400,7 @@ int getsockname(int socket, struct sockaddr *addr, socklen_t *addrlen)
 	// addr_raw = byte2char(addr->sa_data, *addrlen);
 	// fprintf(stdout, "getsockname: getsockname: %d addr %s raw_addr %s addrlen %d\n", socket, addr_str, addr_raw, *addrlen);
 
-	if (!fd_getvaddr(socket, addr, addrlen)) {
+	if (!fd_getvlocaladdr(socket, addr, addrlen)) {
 		return 0;
 	}
 
