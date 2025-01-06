@@ -588,6 +588,20 @@ static int copysockopts(int dfd, int sfd, struct socket_calls *dapi,
 		return ret;
 
 	len = sizeof param;
+	ret = sapi->getsockopt(sfd, SOL_SOCKET, SO_SNDBUF, &param, &len);
+	if (param && !ret)
+		ret = dapi->setsockopt(dfd, SOL_SOCKET, SO_SNDBUF, &param, len);
+	if (ret)
+		return ret;
+
+	len = sizeof param;
+	ret = sapi->getsockopt(sfd, SOL_SOCKET, SO_RCVBUF, &param, &len);
+	if (param && !ret)
+		ret = dapi->setsockopt(dfd, SOL_SOCKET, SO_RCVBUF, &param, len);
+	if (ret)
+		return ret;
+
+	len = sizeof param;
 	ret = sapi->getsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, &param, &len);
 	if (param && !ret)
 		ret = dapi->setsockopt(dfd, IPPROTO_TCP, TCP_NODELAY, &param, len);
