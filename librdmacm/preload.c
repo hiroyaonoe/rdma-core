@@ -50,6 +50,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/un.h>
 
 #include <sys/uio.h>
 
@@ -60,6 +61,7 @@
 #include "indexer.h"
 
 #define ETRYRDMA 999
+#define TIACCOON_CONTROL_PATH "tiaccoon-rsocket-control"
 
 struct socket_calls {
 	int (*socket)(int domain, int type, int protocol);
@@ -104,6 +106,8 @@ static int sq_size;
 static int rq_size;
 static int sq_inline;
 static int fork_support;
+
+static int tiaccoon_control_fd = -1;
 
 enum fd_type {
 	fd_normal,
@@ -550,6 +554,7 @@ static void getenv_options(void)
 static void init_preload(void)
 {
 	static int init;
+	struct sockaddr_un addr;
 
 	/* Quick check without lock */
 	if (init)
@@ -613,6 +618,27 @@ static void init_preload(void)
 	getenv_options();
 	scan_config();
 	init = 1;
+
+	if (tiaccoon_control_fd < 0) {
+		int err;
+
+		tiaccoon_control_fd = real.socket(AF_UNIX, SOCK_STREAM, 0);
+		if (tiaccoon_control_fd < 0) {
+			fprintf(stderr, "Failed to open tiaccoon control socket\n");
+			goto out;
+		}
+
+		memset(&addr, 0, sizeof(addr));
+		addr.sun_family = AF_UNIX;
+		strncpy(addr.sun_path, TIACCOON_CONTROL_PATH, sizeof(addr.sun_path) - 1);
+
+		err = real.connect(tiaccoon_control_fd, (struct sockaddr *)&addr, sizeof(addr));
+		if (err < 0) {
+			fprintf(stderr, "Failed to connect to tiaccoon control socket\n");
+			real.close(tiaccoon_control_fd);
+			tiaccoon_control_fd = -1;
+		}
+	}
 out:
 	pthread_mutex_unlock(&mut);
 }
@@ -1099,6 +1125,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	int fd, ret, ret2;
 	struct sockaddr *paddr;
 	socklen_t paddrlen;
+	char *req, *resp;
 	// char *addr_str, *addr_raw;
 
 	// addr_str = sockaddr2char(addr);
@@ -1154,6 +1181,20 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 					// 	addrlen);
 					return ret;
 				}
+				req = calloc(5, sizeof(char));
+				strcpy(req, "PING");
+				ret = send(tiaccoon_control_fd, req, strlen(req), 0);
+				if (ret < 0) {
+					fprintf(stderr, "Failed to send tiaccoon control message\n");
+					return ret;
+				}
+				resp = calloc(64, sizeof(char));
+				ret = recv(tiaccoon_control_fd, resp, 64, 0);
+				if (ret < 0) {
+					fprintf(stderr, "Failed to receive tiaccoon control message\n");
+					return ret;
+				}
+				fprintf(stdout, "tiaccoon control message: %s\n", resp);
 			}
 			fd_store(socket, fd, fd_normal, fd_ready);
 			// fprintf(stdout, "connect: not rdma\n");
