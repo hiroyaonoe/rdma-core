@@ -642,6 +642,7 @@ static void init_preload(void)
 			fprintf(stderr, "Failed to connect to tiaccoon control socket\n");
 			real.close(tiaccoon_control_fd);
 			tiaccoon_control_fd = -1;
+			goto out;
 		}
 
 		req = calloc(5, sizeof(char)); // 4 + 1
@@ -1268,10 +1269,10 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 					// 	addr_raw,
 					// 	vaddrlen);
 
-					ret = rsend(fd, &myvip, vaddrlen, 0);
-					if (ret < 0) {
+					ret2 = rsend(fd, &myvip, vaddrlen, 0);
+					if (ret2 < 0) {
 						fprintf(stdout, "connect: rsend failed: %d %d\n", socket, fd);
-						return ret;
+						return ret2;
 					}
 					return ret;
 				}
