@@ -145,46 +145,46 @@ struct config_entry {
 	int protocol;
 };
 
-static char *sockaddr2char(const struct sockaddr *addr) {
-	static char result[NI_MAXHOST + NI_MAXSERV + 32];
-	char host[NI_MAXHOST], service[NI_MAXSERV];
-	int ret;
+// static char *sockaddr2char(const struct sockaddr *addr) {
+// 	static char result[NI_MAXHOST + NI_MAXSERV + 32];
+// 	char host[NI_MAXHOST], service[NI_MAXSERV];
+// 	int ret;
 
-	if (!addr) {
-		snprintf(result, sizeof(result), "Address is NULL");
-		return result;
-	}
+// 	if (!addr) {
+// 		snprintf(result, sizeof(result), "Address is NULL");
+// 		return result;
+// 	}
 
-	switch (addr->sa_family) {
-		case AF_UNIX:
-			snprintf(result, sizeof(result), "Unix Domain Socket: %d: %s", addr->sa_family, addr->sa_data);
-			return result;
-			break;
-	}
+// 	switch (addr->sa_family) {
+// 		case AF_UNIX:
+// 			snprintf(result, sizeof(result), "Unix Domain Socket: %d: %s", addr->sa_family, addr->sa_data);
+// 			return result;
+// 			break;
+// 	}
 
-	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
-	if (ret != 0) {
-		snprintf(result, sizeof(result), "getnameinfo: %s: %d: %s", gai_strerror(ret), addr->sa_family, addr->sa_data);
-		return result;
-	}
+// 	ret = getnameinfo(addr, sizeof(*addr), host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+// 	if (ret != 0) {
+// 		snprintf(result, sizeof(result), "getnameinfo: %s: %d: %s", gai_strerror(ret), addr->sa_family, addr->sa_data);
+// 		return result;
+// 	}
 
-	switch (addr->sa_family) {
-		case AF_INET:
-			snprintf(result, sizeof(result), "IPv4 Address: %d: %s, Port: %s", addr->sa_family, host, service);
-			break;
-		case AF_INET6:
-			snprintf(result, sizeof(result), "IPv6 Address: %d: %s, Port: %s", addr->sa_family, host, service);
-			break;
-		case AF_IB:
-			snprintf(result, sizeof(result), "InfiniBand Address: %d: %s, Port: %s", addr->sa_family, host, service);
-			break;
-		default:
-			snprintf(result, sizeof(result), "Unknown Address Family: %d: %s", addr->sa_family, host);
-			break;
-	}
+// 	switch (addr->sa_family) {
+// 		case AF_INET:
+// 			snprintf(result, sizeof(result), "IPv4 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+// 			break;
+// 		case AF_INET6:
+// 			snprintf(result, sizeof(result), "IPv6 Address: %d: %s, Port: %s", addr->sa_family, host, service);
+// 			break;
+// 		case AF_IB:
+// 			snprintf(result, sizeof(result), "InfiniBand Address: %d: %s, Port: %s", addr->sa_family, host, service);
+// 			break;
+// 		default:
+// 			snprintf(result, sizeof(result), "Unknown Address Family: %d: %s", addr->sa_family, host);
+// 			break;
+// 	}
 
-	return result;
-}
+// 	return result;
+// }
 
 static char* byte2char(const char *buf, size_t len) {
     static char result[1024];
@@ -558,8 +558,8 @@ static void init_preload(void)
 	static int init;
 	struct sockaddr_un addr;
 	int ret;
-	char *req, *resp;
-	char *addr_str, *addr_raw;
+	char *req, *resp, *resp_raw;
+	// char *addr_str, *addr_raw;
 
 	/* Quick check without lock */
 	if (init)
@@ -657,19 +657,19 @@ static void init_preload(void)
 			fprintf(stderr, "Failed to receive tiaccoon control message\n");
 			goto out;
 		}
-		fprintf(stdout, "tiaccoon control message: %s\n", resp);
+		// fprintf(stdout, "tiaccoon control message: %s\n", resp);
 		if (resp[0] != 'O' || resp[1] != 'K') {
-			addr_raw = byte2char(resp, 2);
-			fprintf(stderr, "Failed to receive OK from tiaccoon control message: |%s|\n", addr_raw);
+			resp_raw = byte2char(resp, 2);
+			fprintf(stderr, "Failed to receive OK from tiaccoon control message: |%s|\n", resp_raw);
 			goto out;
 		}
 
 		ret = recv(tiaccoon_control_fd, &myvip, sizeof(struct sockaddr), 0);
-		addr_str = sockaddr2char(&myvip);
-		addr_raw = byte2char(myvip.sa_data, 16);
-		fprintf(stdout, "init_preload: myvip: addr %s raw_addr %s\n",
-			addr_str,
-			addr_raw);
+		// addr_str = sockaddr2char(&myvip);
+		// addr_raw = byte2char(myvip.sa_data, 16);
+		// fprintf(stdout, "init_preload: myvip: addr %s raw_addr %s\n",
+		// 	addr_str,
+		// 	addr_raw);
 	}
 out:
 	pthread_mutex_unlock(&mut);
@@ -954,8 +954,8 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 	struct fd_info *fdi;
 	struct sockaddr *vlocaladdr, *vremoteaddr;
 	socklen_t *vlocaladdrlen, vremoteaddrlen;
-	char *req, *resp;
-	char *addr_str, *addr_raw;
+	char *req, *resp, *resp_raw;
+	// char *addr_str, *addr_raw;
 	// fprintf(stdout, "accept: accept: %d\n", socket);
 
 	if (fd_get(socket, &fd) == fd_rsocket) {
@@ -966,7 +966,7 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 
 		// TODO: accept queue
 		afd = raccept(fd, addr, addrlen);
-		fprintf(stdout, "accept: raccept: %d %d index %d ret %d\n", socket, fd, index, afd);
+		// fprintf(stdout, "accept: raccept: %d %d index %d ret %d\n", socket, fd, index, afd);
 		if (afd < 0) {
 			fd_close(index, &fd);
 			fdi = idm_lookup(&idm, socket);
@@ -985,41 +985,41 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 		vlocaladdr = malloc(sizeof(struct sockaddr));
 		vlocaladdrlen = malloc(sizeof(socklen_t));
 		fd_getvlocaladdr(socket, vlocaladdr, vlocaladdrlen);
-		fprintf(stdout, "accept: fd_getvlocaladdr: %d %d %d\n", socket, fd, index);
+		// fprintf(stdout, "accept: fd_getvlocaladdr: %d %d %d\n", socket, fd, index);
 
 		fd_store(index, afd, fd_rsocket, fd_ready);
 		fd_store_vlocaladdr(index, vlocaladdr, vlocaladdrlen);
-		fprintf(stdout, "accept: fd_store_vlocaladdr: %d %d %d\n", socket, fd, index);
+		// fprintf(stdout, "accept: fd_store_vlocaladdr: %d %d %d\n", socket, fd, index);
 
 		vremoteaddr = malloc(sizeof(struct sockaddr));
 		vremoteaddrlen = sizeof(struct sockaddr);
-		fprintf(stdout, "accept: malloc(sizeof(struct sockaddr)): %d %d %d\n", socket, fd, index);
+		// fprintf(stdout, "accept: malloc(sizeof(struct sockaddr)): %d %d %d\n", socket, fd, index);
 		ret = rrecv(afd, vremoteaddr, vremoteaddrlen, 0);
-		fprintf(stdout, "accept: recv: %d %d %d ret %d\n", socket, fd, index, ret);
+		// fprintf(stdout, "accept: recv: %d %d %d ret %d\n", socket, fd, index, ret);
 		if (ret < 0) {
 			fprintf(stdout, "accept: rrecv failed: %d %d\n", socket, fd);
 			return ret;
 		}
-		addr_str = sockaddr2char(vremoteaddr);
-		addr_raw = byte2char(vremoteaddr->sa_data, vremoteaddrlen);
-		fprintf(stdout, "accept: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
-			socket,
-			addr_str,
-			addr_raw,
-			vremoteaddrlen);
+		// addr_str = sockaddr2char(vremoteaddr);
+		// addr_raw = byte2char(vremoteaddr->sa_data, vremoteaddrlen);
+		// fprintf(stdout, "accept: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
+		// 	socket,
+		// 	addr_str,
+		// 	addr_raw,
+		// 	vremoteaddrlen);
 
 		fd_store_vremoteaddr(socket, vremoteaddr, &vremoteaddrlen);
-		fprintf(stdout, "accept: fd_store_vlocaladdr: %d %d\n", socket, fd);
+		// fprintf(stdout, "accept: fd_store_vlocaladdr: %d %d\n", socket, fd);
 
 		memcpy(addr, vremoteaddr, vremoteaddrlen);	
 		memcpy(addrlen, &vremoteaddrlen, sizeof(socklen_t));
-		addr_str = sockaddr2char(addr);
-		addr_raw = byte2char(addr->sa_data, *addrlen);
-		fprintf(stdout, "accept: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
-			socket,
-			addr_str,
-			addr_raw,
-			*addrlen);
+		// addr_str = sockaddr2char(addr);
+		// addr_raw = byte2char(addr->sa_data, *addrlen);
+		// fprintf(stdout, "accept: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
+		// 	socket,
+		// 	addr_str,
+		// 	addr_raw,
+		// 	*addrlen);
 
 		req = calloc(21, sizeof(char)); // 4 + 16 + 1
 		strcpy(req, "ACON");
@@ -1035,10 +1035,10 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 			fprintf(stderr, "Failed to receive tiaccoon control message\n");
 			return ret;
 		}
-		fprintf(stdout, "tiaccoon control message: %s\n", resp);
+		// fprintf(stdout, "tiaccoon control message: %s\n", resp);
 		if (resp[0] != 'O' || resp[1] != 'K') {
-			addr_raw = byte2char(resp, 2);
-			fprintf(stderr, "Failed to receive OK from tiaccoon control message: |%s|\n", addr_raw);
+			resp_raw = byte2char(resp, 2);
+			fprintf(stderr, "Failed to receive OK from tiaccoon control message: |%s|\n", resp_raw);
 			return -1;
 		}
 
@@ -1211,7 +1211,7 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 	int fd, ret, ret2;
 	struct sockaddr *paddr;
 	socklen_t paddrlen, vaddrlen;
-	char *addr_str, *addr_raw;
+	// char *addr_str, *addr_raw;
 
 	// addr_str = sockaddr2char(addr);
 	// addr_raw = byte2char(addr->sa_data, addrlen);
@@ -1248,25 +1248,25 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				// 	ret,
 				// 	errno);
 				ret = transpose_socket(socket, fd_rsocket);
-				fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
+				// fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
 				if (ret < 0)
 					return ret;
 
 				rclose(fd);
 				fd = ret;
 				ret = rconnect(fd, paddr, paddrlen);
-				fprintf(stdout, "connect: rconnect(tiaccoon): %d\n", ret);
+				// fprintf(stdout, "connect: rconnect(tiaccoon): %d\n", ret);
 				if (!ret || errno == EINPROGRESS) {
 					vaddrlen = sizeof(struct sockaddr);
 					fd_store_vlocaladdr(socket, &myvip, &vaddrlen);
-					fprintf(stdout, "connect: fd_store_vlocaladdr: %d %d\n", socket, fd);
-					addr_str = sockaddr2char(&myvip);
-					addr_raw = byte2char(myvip.sa_data, vaddrlen);
-					fprintf(stdout, "connect: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
-						socket,
-						addr_str,
-						addr_raw,
-						vaddrlen);
+					// fprintf(stdout, "connect: fd_store_vlocaladdr: %d %d\n", socket, fd);
+					// addr_str = sockaddr2char(&myvip);
+					// addr_raw = byte2char(myvip.sa_data, vaddrlen);
+					// fprintf(stdout, "connect: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
+					// 	socket,
+					// 	addr_str,
+					// 	addr_raw,
+					// 	vaddrlen);
 
 					ret = rsend(fd, &myvip, vaddrlen, 0);
 					if (ret < 0) {
