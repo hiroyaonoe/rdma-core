@@ -950,10 +950,11 @@ int listen(int socket, int backlog)
 
 int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 {
-	int fd, index, ret;
+	int fd, afd, index, ret;
 	struct fd_info *fdi;
-	struct sockaddr *srcvlocaladdr;
-	socklen_t *srcvlocaladdrlen;
+	struct sockaddr *vlocaladdr, *vremoteaddr;
+	socklen_t *vlocaladdrlen, vremoteaddrlen;
+	char *addr_str, *addr_raw;
 	// fprintf(stdout, "accept: accept: %d\n", socket);
 
 	if (fd_get(socket, &fd) == fd_rsocket) {
@@ -963,31 +964,62 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 			return index;
 
 		// TODO: accept queue
-		ret = raccept(fd, addr, addrlen);
-		// fprintf(stdout, "accept: raccept: %d %d index %d ret %d\n", socket, fd, index, ret);
-		if (ret < 0) {
+		afd = raccept(fd, addr, addrlen);
+		fprintf(stdout, "accept: raccept: %d %d index %d ret %d\n", socket, fd, index, afd);
+		if (afd < 0) {
 			fd_close(index, &fd);
 			fdi = idm_lookup(&idm, socket);
 			if (!fdi) {
 				// fprintf(stdout, "accept: idm_lookup failed: %d %d\n", socket, fd);
-				return ret;
+				return afd;
 			}
 			// fprintf(stdout, "accept: idm_lookup: %d %d %d\n", socket, fd, fdi->realfd);
 			if (fdi->realfd != -1) {
 				// fprintf(stdout, "accept: tiaccoon: %d %d %d\n", socket, fd, fdi->realfd);
-				ret = real.accept(fdi->realfd, addr, addrlen);
+				afd = real.accept(fdi->realfd, addr, addrlen);
 				// fprintf(stdout, "accept: real.accept: %d %d %d ret %d\n", socket, fd, fdi->realfd, ret);
 			}
+			return afd;
+		}
+		vlocaladdr = malloc(sizeof(struct sockaddr));
+		vlocaladdrlen = malloc(sizeof(socklen_t));
+		fd_getvlocaladdr(socket, vlocaladdr, vlocaladdrlen);
+		fprintf(stdout, "accept: fd_getvlocaladdr: %d %d %d\n", socket, fd, index);
+
+		fd_store(index, afd, fd_rsocket, fd_ready);
+		fd_store_vlocaladdr(index, vlocaladdr, vlocaladdrlen);
+		fprintf(stdout, "accept: fd_store_vlocaladdr: %d %d %d\n", socket, fd, index);
+
+		vremoteaddr = malloc(sizeof(struct sockaddr));
+		vremoteaddrlen = sizeof(struct sockaddr);
+		fprintf(stdout, "accept: malloc(sizeof(struct sockaddr)): %d %d %d\n", socket, fd, index);
+		ret = rrecv(afd, vremoteaddr, vremoteaddrlen, 0);
+		fprintf(stdout, "accept: recv: %d %d %d ret %d\n", socket, fd, index, ret);
+		if (ret < 0) {
+			fprintf(stdout, "accept: rrecv failed: %d %d\n", socket, fd);
 			return ret;
 		}
-		srcvlocaladdr = malloc(sizeof(struct sockaddr));
-		srcvlocaladdrlen = malloc(sizeof(socklen_t));
-		fd_getvlocaladdr(socket, srcvlocaladdr, srcvlocaladdrlen);
-		// fprintf(stdout, "accept: fd_getvlocaladdr: %d %d %d\n", socket, fd, index);
+		addr_str = sockaddr2char(vremoteaddr);
+		addr_raw = byte2char(vremoteaddr->sa_data, vremoteaddrlen);
+		fprintf(stdout, "accept: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
+			socket,
+			addr_str,
+			addr_raw,
+			vremoteaddrlen);
 
-		fd_store(index, ret, fd_rsocket, fd_ready);
-		fd_store_vlocaladdr(index, srcvlocaladdr, srcvlocaladdrlen);
-		// No need to store vremoteaddr because rgetpeername or real.getpeername works
+		fd_store_vremoteaddr(socket, vremoteaddr, &vremoteaddrlen);
+		fprintf(stdout, "accept: fd_store_vlocaladdr: %d %d\n", socket, fd);
+
+		memcpy(addr, vremoteaddr, vremoteaddrlen);	
+		memcpy(addrlen, &vremoteaddrlen, sizeof(socklen_t));
+		addr_str = sockaddr2char(addr);
+		addr_raw = byte2char(addr->sa_data, *addrlen);
+		fprintf(stdout, "accept: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
+			socket,
+			addr_str,
+			addr_raw,
+			*addrlen);
+
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
 		// fprintf(stdout, "accept: fd_fork_listen: %d %d\n", socket, fd);
@@ -1156,8 +1188,8 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int fd, ret, ret2;
 	struct sockaddr *paddr;
-	socklen_t paddrlen;
-	// char *addr_str, *addr_raw;
+	socklen_t paddrlen, vaddrlen;
+	char *addr_str, *addr_raw;
 
 	// addr_str = sockaddr2char(addr);
 	// addr_raw = byte2char(addr->sa_data, addrlen);
@@ -1194,22 +1226,31 @@ int connect(int socket, const struct sockaddr *addr, socklen_t addrlen)
 				// 	ret,
 				// 	errno);
 				ret = transpose_socket(socket, fd_rsocket);
-				// fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
+				fprintf(stdout, "connect: transpose_socket to rsocket: %d\n", ret);
 				if (ret < 0)
 					return ret;
 
 				rclose(fd);
 				fd = ret;
 				ret = rconnect(fd, paddr, paddrlen);
-				// fprintf(stdout, "connect: rconnect(tiaccoon): %d\n", ret);
+				fprintf(stdout, "connect: rconnect(tiaccoon): %d\n", ret);
 				if (!ret || errno == EINPROGRESS) {
-					// addr_str = sockaddr2char(addr);
-					// addr_raw = byte2char(addr->sa_data, addrlen);
-					// fprintf(stdout, "connect: ret addr is vremoteaddr: %d addr %s raw_addr %s addrlen %d\n",
-					// 	socket,
-					// 	addr_str,
-					// 	addr_raw,
-					// 	addrlen);
+					vaddrlen = sizeof(struct sockaddr);
+					fd_store_vlocaladdr(socket, &myvip, &vaddrlen);
+					fprintf(stdout, "connect: fd_store_vlocaladdr: %d %d\n", socket, fd);
+					addr_str = sockaddr2char(&myvip);
+					addr_raw = byte2char(myvip.sa_data, vaddrlen);
+					fprintf(stdout, "connect: debug addrlen: %d addr %s raw_addr %s addrlen %d\n",
+						socket,
+						addr_str,
+						addr_raw,
+						vaddrlen);
+
+					ret = rsend(fd, &myvip, vaddrlen, 0);
+					if (ret < 0) {
+						fprintf(stdout, "connect: rsend failed: %d %d\n", socket, fd);
+						return ret;
+					}
 					return ret;
 				}
 			}
