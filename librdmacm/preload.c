@@ -644,7 +644,7 @@ static void init_preload(void)
 			tiaccoon_control_fd = -1;
 		}
 
-		req = calloc(5, sizeof(char));
+		req = calloc(5, sizeof(char)); // 4 + 1
 		strcpy(req, "MVIP");
 		ret = send(tiaccoon_control_fd, req, strlen(req), 0);
 		if (ret < 0) {
@@ -954,6 +954,7 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 	struct fd_info *fdi;
 	struct sockaddr *vlocaladdr, *vremoteaddr;
 	socklen_t *vlocaladdrlen, vremoteaddrlen;
+	char *req, *resp;
 	char *addr_str, *addr_raw;
 	// fprintf(stdout, "accept: accept: %d\n", socket);
 
@@ -1019,6 +1020,27 @@ int accept(int socket, struct sockaddr *addr, socklen_t *addrlen)
 			addr_str,
 			addr_raw,
 			*addrlen);
+
+		req = calloc(21, sizeof(char)); // 4 + 16 + 1
+		strcpy(req, "ACON");
+		strcpy(req + 4, (char *)addr);
+		ret = send(tiaccoon_control_fd, req, strlen(req), 0);
+		if (ret < 0) {
+			fprintf(stderr, "Failed to send tiaccoon control message\n");
+			return ret;
+		}
+		resp = calloc(2, sizeof(char));
+		ret = recv(tiaccoon_control_fd, resp, 2, 0);
+		if (ret < 0) {
+			fprintf(stderr, "Failed to receive tiaccoon control message\n");
+			return ret;
+		}
+		fprintf(stdout, "tiaccoon control message: %s\n", resp);
+		if (resp[0] != 'O' || resp[1] != 'K') {
+			addr_raw = byte2char(resp, 2);
+			fprintf(stderr, "Failed to receive OK from tiaccoon control message: |%s|\n", addr_raw);
+			return -1;
+		}
 
 		return index;
 	} else if (fd_gets(socket) == fd_fork_listen) {
